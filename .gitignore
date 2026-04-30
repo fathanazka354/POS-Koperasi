@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Build artifacts
+*.exe
+*.out
+*.test
+bin/
+dist/
