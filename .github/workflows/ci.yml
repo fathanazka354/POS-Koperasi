@@ -1,0 +1,34 @@
+# CI: setiap push & PR ke branch utama — kompilasi + tes tanpa DB (pure Go).
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race -count=1 ./...
+
+      - name: Build API
+        run: go build -o /tmp/api ./cmd/api
+
+      - name: Build seed
+        run: go build -o /tmp/seed ./cmd/seed
