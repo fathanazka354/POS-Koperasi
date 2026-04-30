@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Demo Chat Penjual — POS Koperasi</title>
+  <style>
+    :root {
+      --brand: #ee4d2d;
+      --brand-dark: #d73211;
+      --bg: #f5f5f5;
+      --card: #fff;
+      --border: #e8e8e8;
+      --text: #222;
+      --muted: #888;
+      --bubble-buyer: #e8f4ff;
+      --bubble-seller: #fff4e8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+    }
+    header {
+      background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+      color: #fff; padding: 1rem 1.25rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    }
+    header h1 { margin: 0; font-size: 1.15rem; font-weight: 700; }
+    header p { margin: .35rem 0 0; opacity: .95; font-size: .85rem; }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 1rem; }
+    .grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+    }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+    .panel {
+      background: var(--card); border-radius: 12px; border: 1px solid var(--border);
+      overflow: hidden; display: flex; flex-direction: column; min-height: 520px;
+    }
+    .panel-head {
+      padding: .75rem 1rem; border-bottom: 1px solid var(--border);
+      font-weight: 600; display: flex; align-items: center; gap: .5rem;
+    }
+    .badge { font-size: .7rem; padding: .15rem .45rem; border-radius: 6px; background: #eee; color: #555; }
+    .panel-body { padding: 1rem; flex: 1; display: flex; flex-direction: column; gap: .75rem; }
+    label { font-size: .75rem; color: var(--muted); display: block; margin-bottom: .25rem; }
+    .wrap > div input#baseUrl {
+      width: 100%;
+    }
+    .row input {
+      width: 100%;
+    }
+    .panel-body input[type="text"],
+    .panel-body input[type="number"],
+    .panel-body input[type="password"] {
+      width: 100%;
+    }
+    input, button, textarea {
+      font: inherit; padding: .5rem .65rem; border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    button {
+      cursor: pointer; background: var(--brand); color: #fff; border: none; font-weight: 600;
+      position: relative;
+      z-index: 1;
+    }
+    button.secondary { background: #fff; color: var(--brand); border: 1px solid var(--brand); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+    .log {
+      flex: 1; min-height: 180px; max-height: 260px; overflow: auto;
+      background: #fafafa; border: 1px solid var(--border); border-radius: 8px;
+      padding: .5rem .65rem; font-size: .8rem; font-family: ui-monospace, monospace;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .chat-area {
+      flex: 1; min-height: 200px; max-height: 280px; overflow: auto;
+      background: #fafafa; border: 1px solid var(--border); border-radius: 8px;
+      padding: .6rem; display: flex; flex-direction: column; gap: .45rem;
+    }
+    .bubble {
+      max-width: 88%; padding: .45rem .65rem; border-radius: 10px; font-size: .88rem; line-height: 1.35;
+    }
+    .bubble.buyer { align-self: flex-end; background: var(--bubble-buyer); border: 1px solid #d4e8ff; }
+    .bubble.seller { align-self: flex-start; background: var(--bubble-seller); border: 1px solid #ffe4cc; }
+    .bubble .meta { font-size: .68rem; color: var(--muted); margin-top: .25rem; }
+    .hint { font-size: .78rem; color: var(--muted); margin: 0; }
+    .warn {
+      font-size: .78rem; background: #fff8e6; border: 1px solid #f0d090;
+      border-radius: 8px; padding: .65rem .85rem; margin: .5rem 0; color: #5c4a20;
+    }
+    .toolbar {
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      gap: .5rem;
+      width: 100%;
+      min-height: 2.75rem;
+    }
+    .toolbar input[type="text"] {
+      flex: 1 1 0;
+      min-width: 0;
+      width: auto;
+      max-width: none;
+    }
+    /* Timpa lebar 100% pada field pesan di toolbar */
+    .panel-body .toolbar input[type="text"] {
+      width: auto;
+      min-width: 0;
+    }
+    .toolbar button {
+      flex: 0 0 auto;
+      min-width: 5.5rem;
+      width: auto;
+      align-self: stretch;
+    }
+    /* Tombol aksi penuh lebar (bukan tombol Kirim di toolbar) */
+    .panel-body > button {
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Demo Chat ke Penjual (WebSocket)</h1>
+    <p>Alur mirip Shopee/Tokopedia: pembeli buka thread per produk &amp; penjual (karyawan), pesan realtime.</p>
+  </header>
+  <div class="wrap">
+    <p class="hint">Login → buat percakapan → Connect WS → <strong>join</strong> dengan <code>conversation_id</code> → kirim <code>message</code>.</p>
+    <div class="warn" style="background:#e8f4ff;border-color:#9cc7ff">
+      <strong>Buka demo di browser (tempel utuh, jangan ketik “PORT”):</strong><br />
+      <code id="demoUrlCopy" style="font-size:.95rem;word-break:break-all">http://localhost:8080/demo/chat</code>
+      <div style="margin-top:.5rem;font-size:.78rem;color:#444">
+        Angka <strong>8080</strong> harus sama dengan yang muncul di terminal saat <code>make run</code> (lihat <code>APP_PORT</code> di <code>.env</code>).
+        Jika terminal menulis <code>:8070</code>, ganti jadi <code>http://localhost:8070/demo/chat</code>.
+      </div>
+    </div>
+    <p class="hint" style="margin-top:.5rem">
+      <strong>Safari:</strong> salin URL di atas (Cmd+V di bilah alamat). Jangan mengetik <code>localhost</code> saja.
+      Jangan pakai teks <code>PORT</code> — itu hanya penanda dokumentasi, bukan bagian URL.
+    </p>
+    <p id="fileWarn" class="warn" style="display:none">
+      Anda membuka halaman dari file disk (<code>file://</code>). Browser sering memblokir fetch ke API.
+      Jalankan server Go lalu buka di browser: <strong><span id="demoUrlHint">http://localhost:8080/demo/chat</span></strong>
+      (sesuaikan angka port dengan <code>APP_PORT</code> / output terminal).
+    </p>
+    <p id="staticServerWarn" class="warn" style="display:none">
+      Anda membuka HTML lewat <strong>Live Server / server statis</strong> (sering port <code>5500</code>).
+      Itu hanya melayani file, <em>bukan</em> API Go — POST ke sana hasilnya <strong>405 Method Not Allowed</strong>.
+      Jalankan <code>make run</code>, lalu isi <strong>Base URL API</strong> ke backend (mis. <code>http://127.0.0.1:8080</code>).
+      Lalu buka halaman demo dari API Go: <code>http://127.0.0.1:8080/demo/chat</code> (ganti 8080 jika beda).
+    </p>
+    <div style="margin:.75rem 0;">
+      <label>Base URL <strong>API Go</strong> (bukan alamat Live Server / tab browser). Contoh: <code>http://127.0.0.1:8080</code></label>
+      <input id="baseUrl" type="text" value="http://localhost:8080" />
+    </div>
+    <div class="grid">
+      <section class="panel">
+        <div class="panel-head">Pembeli (member) <span class="badge">member JWT</span></div>
+        <div class="panel-body">
+          <div>
+            <label>Member code &amp; telepon (seed: MBR001 / 081234567890)</label>
+            <div class="row">
+              <input id="mCode" placeholder="MBR001" value="MBR001" />
+              <input id="mPhone" placeholder="phone" value="081234567890" />
+            </div>
+          </div>
+          <button type="button" id="mLogin">Login member</button>
+          <div class="row">
+            <div>
+              <label>product_id</label>
+              <input id="prodId" type="number" value="1" min="1" />
+            </div>
+            <div>
+              <label>seller_employee_id</label>
+              <input id="empId" type="number" value="1" min="1" />
+            </div>
+          </div>
+          <button type="button" class="secondary" id="mCreateConv">Buat / ambil percakapan</button>
+          <p class="hint">Token: <span id="mTokPreview">—</span></p>
+          <button type="button" id="mWs">Connect WebSocket pembeli</button>
+          <div>
+            <label>conversation_id (auto dari buat percakapan)</label>
+            <input id="convId" type="number" placeholder="1" />
+          </div>
+          <button type="button" class="secondary" id="mJoin">Join room</button>
+          <div class="chat-area" id="chatBuyer"></div>
+          <div class="toolbar">
+            <input id="msgBuyer" placeholder="Tulis pesan..." />
+            <button type="button" id="sendBuyer">Kirim</button>
+          </div>
+          <label>Log JSON</label>
+          <div class="log" id="logBuyer"></div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-head">Penjual (karyawan) <span class="badge">employee JWT</span></div>
+        <div class="panel-body">
+          <div class="row">
+            <div>
+              <label>NIK</label>
+              <input id="eNik" value="EMP001" />
+            </div>
+            <div>
+              <label>PIN</label>
+              <input id="ePin" type="password" value="1234" />
+            </div>
+          </div>
+          <button type="button" id="eLogin">Login karyawan</button>
+          <p class="hint">Token: <span id="eTokPreview">—</span></p>
+          <button type="button" id="eWs">Connect WebSocket penjual</button>
+          <button type="button" class="secondary" id="eJoin">Join room (conversation_id sama)</button>
+          <div class="chat-area" id="chatSeller"></div>
+          <div class="toolbar">
+            <input id="msgSeller" placeholder="Balas pembeli..." />
+            <button type="button" id="sendSeller">Kirim</button>
+          </div>
+          <label>Log JSON</label>
+          <div class="log" id="logSeller"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <script>
+    function byId(id) {
+      return document.getElementById(id);
+    }
+
+    function apiBase() {
+      var el = byId("baseUrl");
+      return el ? el.value.replace(/\/$/, "") : "";
+    }
+
+    var mToken = "";
+    var eToken = "";
+    var wsB = null;
+    var wsS = null;
+    /** Hindari bubble ganda: echo lokal + broadcast WS untuk pesan sendiri */
+    var skipNextWsEcho = { buyer: null, seller: null };
+
+    function log(which, obj) {
+      var el = which === "b" ? byId("logBuyer") : byId("logSeller");
+      if (!el) return;
+      var line = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+      el.textContent += line + "\n---\n";
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function pushBubble(panel, role, text, meta) {
+      var div = document.createElement("div");
+      div.className = "bubble " + role;
+      div.innerHTML = text.replace(/</g, "&lt;") + (meta ? "<div class=\"meta\">" + String(meta) + "</div>" : "");
+      panel.appendChild(div);
+      panel.scrollTop = panel.scrollHeight;
+    }
+
+    function wsUrl(tok) {
+      var u = new URL(apiBase());
+      var proto = u.protocol === "https:" ? "wss:" : "ws:";
+      return proto + "//" + u.host + "/api/v1/ws/chat?token=" + encodeURIComponent(tok);
+    }
+
+    function bindClick(id, handler) {
+      var el = byId(id);
+      if (!el) {
+        console.error("Demo chat: elemen tidak ditemukan #" + id);
+        return;
+      }
+      el.addEventListener("click", handler);
+    }
+
+    /** Pesan untuk Safari/Chrome saat koneksi ditolak atau diblokir */
+    function explainFetchError(err) {
+      var msg = err && err.message ? err.message : String(err);
+      if (msg.indexOf("405") >= 0 || msg.indexOf("Method Not Allowed") >= 0) {
+        return (
+          msg +
+          "\n\nPort 5500 = Live Server (hanya file statis). Ganti Base URL ke API Go (contoh http://127.0.0.1:8080) lalu coba lagi."
+        );
+      }
+      if (
+        msg.indexOf("Load failed") >= 0 ||
+        msg.indexOf("Failed to fetch") >= 0 ||
+        msg.indexOf("NetworkError") >= 0 ||
+        msg.indexOf("network") >= 0
+      ) {
+        return (
+          msg +
+          "\n\nKemungkinan penyebab:\n" +
+          "• Server API belum jalan — di folder proyek jalankan: make run\n" +
+          "• Port salah — Base URL harus ke API Go (APP_PORT), bukan port Live Server (5500).\n" +
+          "• Buka /demo/chat dari server Go, atau isi Base URL manual ke alamat make run.\n" +
+          "• Coba http://127.0.0.1:8080 (ganti 8080 dengan port di terminal / APP_PORT)."
+        );
+      }
+      return msg;
+    }
+
+    /** fetch JSON API + cek HTTP status */
+    function postJSON(url, body, headers) {
+      var h = headers || {};
+      h["Content-Type"] = "application/json";
+      return fetch(url, { method: "POST", headers: h, body: JSON.stringify(body) }).then(function (r) {
+        return r.text().then(function (text) {
+          var data = null;
+          try {
+            data = text ? JSON.parse(text) : null;
+          } catch (parseErr) {
+            if (!r.ok) {
+              throw new Error("HTTP " + r.status + " — bukan JSON: " + (text || "").slice(0, 120));
+            }
+            throw parseErr;
+          }
+          if (!r.ok) {
+            if (r.status === 405) {
+              throw new Error(
+                "HTTP 405 — server ini bukan API Go (sering Live Server port 5500). " +
+                  "Ganti Base URL ke alamat make run, mis. http://127.0.0.1:8080"
+              );
+            }
+            var apiMsg = data && (data.message || data.error);
+            if (apiMsg) {
+              throw new Error(apiMsg);
+            }
+            throw new Error("HTTP " + r.status + " — " + (text || "").slice(0, 160));
+          }
+          return data;
+        });
+      });
+    }
+
+    function currentPort() {
+      var p = parseInt(location.port, 10);
+      if (p) return p;
+      return location.protocol === "https:" ? 443 : 80;
+    }
+
+    /** Port umum server statis (Live Server, dll.) — jangan pakai sebagai Base URL API */
+    function isStaticDevPort(port) {
+      return port === 5500 || port === 5501 || port === 35729;
+    }
+
+    function syncBaseUrlFromPage() {
+      if (location.protocol === "file:") {
+        var wf = byId("fileWarn");
+        if (wf) wf.style.display = "block";
+        return;
+      }
+      if (location.protocol !== "http:" && location.protocol !== "https:") {
+        return;
+      }
+
+      var port = currentPort();
+      var fullDemo = location.origin + "/demo/chat";
+      var hint = byId("demoUrlHint");
+      var copyEl = byId("demoUrlCopy");
+      if (isStaticDevPort(port)) {
+        var ws = byId("staticServerWarn");
+        if (ws) ws.style.display = "block";
+        var defaultAPI = "http://127.0.0.1:8080";
+        var openHere = defaultAPI + "/demo/chat";
+        if (hint) {
+          hint.textContent = openHere;
+        }
+        if (copyEl) {
+          copyEl.textContent = openHere;
+        }
+        var base = byId("baseUrl");
+        if (base) {
+          var v = (base.value || "").trim();
+          if (!v || v.indexOf(String(port)) >= 0) {
+            base.value = defaultAPI;
+          }
+        }
+        return;
+      }
+
+      if (hint) {
+        hint.textContent = fullDemo;
+      }
+      if (copyEl) {
+        copyEl.textContent = fullDemo;
+      }
+      var baseEl = byId("baseUrl");
+      if (baseEl) {
+        baseEl.value = location.origin;
+      }
+    }
+
+    function loadChatHistory(which) {
+      var convEl = byId("convId");
+      var convId = convEl && convEl.value ? String(convEl.value).trim() : "";
+      if (!convId) return;
+      var token = which === "b" ? mToken : eToken;
+      if (!token) return;
+      var url = apiBase() + "/api/v1/chat/conversations/" + convId + "/messages";
+      fetch(url, { headers: { Authorization: "Bearer " + token } })
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (j) {
+          if (!j || !j.success || !j.data) return;
+          var panel = which === "b" ? byId("chatBuyer") : byId("chatSeller");
+          if (!panel) return;
+          panel.innerHTML = "";
+          var rows = j.data;
+          for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            var who = row.sender_role === "buyer" ? "buyer" : "seller";
+            pushBubble(
+              panel,
+              who,
+              row.body,
+              row.created_at ? new Date(row.created_at).toLocaleString() : ""
+            );
+          }
+        })
+        .catch(function (e) {
+          log(which, "riwayat chat: " + (e && e.message ? e.message : String(e)));
+        });
+    }
+
+    function setupWs(which, tok, logPrefix) {
+      var url = wsUrl(tok);
+      var ws = new WebSocket(url);
+      ws.onopen = function () {
+        log(which === "b" ? "b" : "s", logPrefix + " connected");
+      };
+      ws.onmessage = function (ev) {
+        var msg;
+        try {
+          msg = JSON.parse(ev.data);
+        } catch (ignore) {
+          msg = ev.data;
+        }
+        log(which === "b" ? "b" : "s", msg);
+        if (msg && msg.type === "joined") {
+          loadChatHistory(which);
+          return;
+        }
+        if (msg && msg.type === "message" && msg.message) {
+          var m = msg.message;
+          var role = m.sender_role === "buyer" ? "buyer" : "seller";
+          var sk = skipNextWsEcho[role];
+          if (sk && sk.body === m.body && Date.now() - sk.t < 8000) {
+            skipNextWsEcho[role] = null;
+            return;
+          }
+          var who = role === "buyer" ? "buyer" : "seller";
+          var panel = which === "b" ? byId("chatBuyer") : byId("chatSeller");
+          if (panel) {
+            pushBubble(panel, who, m.body, new Date(m.created_at).toLocaleString());
+          }
+        }
+      };
+      ws.onerror = function () {
+        log(which === "b" ? "b" : "s", "ws error");
+      };
+      ws.onclose = function () {
+        log(which === "b" ? "b" : "s", "ws closed");
+      };
+      return ws;
+    }
+
+    function join(ws, which) {
+      var convEl = byId("convId");
+      var id = convEl ? Number(convEl.value) : 0;
+      if (!id) return alert("Isi conversation_id");
+      if (!ws || ws.readyState !== 1) return alert("Connect WS dulu");
+      var payload = JSON.stringify({ type: "join", conversation_id: id });
+      ws.send(payload);
+      log(which, { sent: payload });
+    }
+
+    function sendMsg(ws, which, inputId) {
+      var convEl = byId("convId");
+      var id = convEl ? Number(convEl.value) : 0;
+      var inp = byId(inputId);
+      var body = inp ? inp.value.trim() : "";
+      if (!id || !body) return;
+      if (!ws || ws.readyState !== 1) return alert("Connect WS dulu");
+      var role = which === "b" ? "buyer" : "seller";
+      var panel = which === "b" ? byId("chatBuyer") : byId("chatSeller");
+      if (panel) {
+        pushBubble(panel, role, body, new Date().toLocaleString());
+      }
+      skipNextWsEcho[role] = { body: body, t: Date.now() };
+      ws.send(JSON.stringify({ type: "message", conversation_id: id, body: body }));
+      if (inp) inp.value = "";
+      log(which, { sent: { type: "message", conversation_id: id, body: body } });
+    }
+
+    function initDemo() {
+      bindClick("mLogin", function () {
+        postJSON(apiBase() + "/api/v1/auth/member-login", {
+          member_code: byId("mCode").value.trim(),
+          phone: byId("mPhone").value.trim(),
+        })
+          .then(function (j) {
+            log("b", j);
+            if (!j.success) return alert(j.message || "gagal");
+            mToken = j.data.token;
+            byId("mTokPreview").textContent = mToken.slice(0, 24) + "…";
+          })
+          .catch(function (e) {
+            alert("Gagal login:\n" + explainFetchError(e));
+          });
+      });
+
+      bindClick("eLogin", function () {
+        postJSON(apiBase() + "/api/v1/auth/login", {
+          nik: byId("eNik").value.trim(),
+          pin: byId("ePin").value,
+        })
+          .then(function (j) {
+            log("s", j);
+            if (!j.success) return alert(j.message || "gagal");
+            eToken = j.data.token;
+            byId("eTokPreview").textContent = eToken.slice(0, 24) + "…";
+          })
+          .catch(function (e) {
+            alert("Gagal login:\n" + explainFetchError(e));
+          });
+      });
+
+      bindClick("mCreateConv", function () {
+        if (!mToken) return alert("Login member dulu");
+        postJSON(
+          apiBase() + "/api/v1/chat/conversations",
+          {
+            product_id: Number(byId("prodId").value),
+            seller_employee_id: Number(byId("empId").value),
+          },
+          { Authorization: "Bearer " + mToken }
+        )
+          .then(function (j) {
+            log("b", j);
+            if (!j.success) return alert(j.message || "gagal");
+            byId("convId").value = j.data.id;
+          })
+          .catch(function (e) {
+            alert("Gagal:\n" + explainFetchError(e));
+          });
+      });
+
+      bindClick("mWs", function () {
+        if (!mToken) return alert("Login member dulu");
+        if (wsB) {
+          try {
+            wsB.close();
+          } catch (ignore) {}
+        }
+        wsB = setupWs("b", mToken, "buyer");
+      });
+
+      bindClick("eWs", function () {
+        if (!eToken) return alert("Login karyawan dulu");
+        if (wsS) {
+          try {
+            wsS.close();
+          } catch (ignore) {}
+        }
+        wsS = setupWs("s", eToken, "seller");
+      });
+
+      bindClick("mJoin", function () {
+        join(wsB, "b");
+      });
+      bindClick("eJoin", function () {
+        join(wsS, "s");
+      });
+
+      bindClick("sendBuyer", function () {
+        sendMsg(wsB, "b", "msgBuyer");
+      });
+      bindClick("sendSeller", function () {
+        sendMsg(wsS, "s", "msgSeller");
+      });
+    }
+
+    function boot() {
+      syncBaseUrlFromPage();
+      initDemo();
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", boot);
+    } else {
+      boot();
+    }
+  </script>
+</body>
+</html>

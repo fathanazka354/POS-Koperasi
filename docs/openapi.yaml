@@ -1,0 +1,483 @@
+openapi: 3.0.3
+info:
+  title: POS Koperasi API
+  description: |
+    API POS Koperasi (Golang + Chi + PostgreSQL).
+    Impor file ini ke Postman: **Import → pilih `openapi.yaml`**.
+
+    - Respons umum: `{ "success", "message", "data?" }` — lihat skema `ApiResponse`.
+    - Endpoint dilindungi memakai header `Authorization: Bearer <JWT>`.
+    - Webhook Midtrans tidak memakai JWT; verifikasi dilakukan server-side menggunakan `signature_key` di payload.
+  version: 1.0.0
+
+servers:
+  - url: 'http://localhost:{port}'
+    description: Lokal — ganti `port` di Postman (Environment) agar sama dengan APP_PORT
+    variables:
+      port:
+        default: '8080'
+        description: APP_PORT dari .env (mis. 8070)
+
+tags:
+  - name: Auth
+  - name: Products
+  - name: Transactions
+  - name: Webhooks
+
+paths:
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login kasir
+      operationId: authLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              default:
+                value:
+                  nik: EMP001
+                  pin: "1234"
+      responses:
+        '200':
+          description: Login berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      success:
+                        example: true
+                      message:
+                        example: Login berhasil
+                      data:
+                        $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/products/barcode/{barcode}:
+    get:
+      tags: [Products]
+      summary: Cari produk berdasarkan barcode
+      operationId: getProductByBarcode
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: barcode
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "8999999001"
+      responses:
+        '200':
+          description: |
+            Sukses atau stok habis. Jika stok 0, `success` bisa `false` namun `data` tetap berisi produk.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseProductWithStock'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/products/low-stock:
+    get:
+      tags: [Products]
+      summary: Daftar produk stok rendah
+      description: |
+        Saat ini handler mengembalikan `data: null` (stub).
+      operationId: getLowStock
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        nullable: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/products/low-stock/detail:
+    get:
+      tags: [Products]
+      summary: Detail low stock (supervisor / admin)
+      description: |
+        Memerlukan JWT dengan role `supervisor` atau `admin`. Perilaku sama dengan `/products/low-stock` (stub).
+      operationId: getLowStockDetail
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/transactions:
+    post:
+      tags: [Transactions]
+      summary: Buat transaksi
+      description: |
+        `pay_method`: `cash` | `qris` | `va` | `ewallet`.
+        Jika `branch_id` tidak diisi atau 0, diisi dari klaim JWT `branch_id`.
+      operationId: createTransaction
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransactionRequest'
+            examples:
+              cash:
+                summary: Pembayaran tunai
+                value:
+                  branch_id: 1
+                  register_id: 1
+                  member_code: MBR001
+                  pay_method: cash
+                  items:
+                    - product_id: 1
+                      quantity: 2
+              qris:
+                summary: QRIS (pending, tunggu webhook)
+                value:
+                  branch_id: 1
+                  register_id: 1
+                  pay_method: qris
+                  items:
+                    - product_id: 1
+                      quantity: 1
+      responses:
+        '201':
+          description: Transaksi dibuat (cash bisa langsung paid; non-cash biasanya pending)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      success:
+                        example: true
+                      data:
+                        $ref: '#/components/schemas/CreateTransactionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/midtrans/webhook:
+    post:
+      tags: [Webhooks]
+      summary: Midtrans notification webhook
+      description: |
+        Backend memverifikasi signature **server-side** menggunakan `signature_key` dari payload Midtrans.
+        Sukses memproses → 200 + JSON `{"status":"received"}`.
+        Jika payload invalid/signature salah → 200 + JSON `{"status":"invalid_signature"}` / `{"status":"invalid_payload"}`.
+        Gagal proses internal → tetap 200 + `{"status":"error_logged"}`.
+      operationId: midtransWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MidtransNotificationPayload'
+            example:
+              order_id: INV-20240115143500-1
+              transaction_id: midtrans_test_001
+              transaction_status: settlement
+              payment_type: qris
+              status_code: "200"
+              gross_amount: "7777.00"
+              signature_key: "PASTE_SIGNATURE_KEY_SESUAI_MIDTRANS"
+      responses:
+        '200':
+          description: Diterima (lihat body untuk status internal)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [received, error_logged]
+              examples:
+                ok:
+                  value:
+                    status: received
+                logged:
+                  value:
+                    status: error_logged
+        '400':
+          description: Body bukan JSON valid (plain text)
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Invalid payload
+        '401':
+          description: Token callback salah (plain text)
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Unauthorized
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Token dari `POST /api/v1/auth/login`. Format header:
+        `Authorization: Bearer <token>`
+
+  schemas:
+    ApiResponse:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          nullable: true
+        error:
+          type: string
+          description: Field ada di kode; handler saat ini jarang mengisinya.
+
+    ApiResponseProductWithStock:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ProductWithStock'
+
+    LoginRequest:
+      type: object
+      required: [nik, pin]
+      properties:
+        nik:
+          type: string
+        pin:
+          type: string
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        employee:
+          $ref: '#/components/schemas/Employee'
+
+    Employee:
+      type: object
+      properties:
+        id:
+          type: integer
+        branch_id:
+          type: integer
+        nik:
+          type: string
+        full_name:
+          type: string
+        role:
+          type: string
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    ProductWithStock:
+      type: object
+      properties:
+        id:
+          type: integer
+        category_id:
+          type: integer
+        supplier_id:
+          type: integer
+        barcode:
+          type: string
+        name:
+          type: string
+        unit:
+          type: string
+        buy_price:
+          type: number
+        sell_price:
+          type: number
+        min_stock:
+          type: integer
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        stock:
+          type: integer
+
+    CreateTransactionRequest:
+      type: object
+      required: [items, pay_method]
+      properties:
+        branch_id:
+          type: integer
+          description: Opsional; jika 0 diganti dari JWT
+        register_id:
+          type: integer
+        member_code:
+          type: string
+        promo_code:
+          type: string
+        pay_method:
+          type: string
+          enum: [cash, qris, va, ewallet]
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/TransactionItemInput'
+
+    TransactionItemInput:
+      type: object
+      required: [product_id, quantity]
+      properties:
+        product_id:
+          type: integer
+        quantity:
+          type: integer
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        branch_id:
+          type: integer
+        register_id:
+          type: integer
+        employee_id:
+          type: integer
+        member_id:
+          type: integer
+          nullable: true
+        promo_id:
+          type: integer
+          nullable: true
+        invoice_no:
+          type: string
+        subtotal:
+          type: number
+        discount:
+          type: number
+        tax:
+          type: number
+        grand_total:
+          type: number
+        status:
+          type: string
+          description: pending | paid | cancelled | refunded
+        created_at:
+          type: string
+          format: date-time
+
+    CreateTransactionResponse:
+      type: object
+      properties:
+        transaction:
+          $ref: '#/components/schemas/Transaction'
+        payment_url:
+          type: string
+          description: Untuk ewallet / invoice
+        qr_string:
+          type: string
+          description: Untuk QRIS
+        va_number:
+          type: string
+          description: Untuk VA
+        midtrans_transaction_id:
+          type: string
+          description: ID transaksi Midtrans
+        message:
+          type: string
+
+    MidtransNotificationPayload:
+      type: object
+      description: Payload notification Midtrans (subset field yang dipakai di aplikasi).
+      properties:
+        order_id:
+          type: string
+        transaction_id:
+          type: string
+        transaction_status:
+          type: string
+          description: "Contoh: settlement (paid), pending, expire, deny"
+        payment_type:
+          type: string
+        status_code:
+          type: string
+          description: "Status code string (dipakai untuk signature)"
+        gross_amount:
+          type: string
+          description: "Gross amount string (dipakai untuk signature)"
+        signature_key:
+          type: string
+
+    ErrorBody:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Validasi gagal atau error bisnis (response JSON)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+    Unauthorized:
+      description: Tidak terautentikasi atau login gagal
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
+    NotFound:
+      description: Sumber daya tidak ditemukan
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorBody'
