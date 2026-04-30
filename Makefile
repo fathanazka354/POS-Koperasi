@@ -15,4 +15,4 @@ reset:
 	@bash scripts/db.sh reset
 
 run:
-	@go run cmd/api/main.go
+	@go run ./cmd/api

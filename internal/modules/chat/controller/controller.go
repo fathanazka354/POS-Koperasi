@@ -188,6 +188,12 @@ func (c *Controller) wsReadPump(cl *utility.Client, p *middleware.ChatPrincipal)
 				c.wsSendError(cl, "conversation_id wajib")
 				continue
 			}
+			// Langkah join implisit: yang kirim pesan otomatis masuk room, supaya broadcast
+			// pesan lawan sampai tanpa harus klik "Join room" dulu (Join eksplisit tetap didukung).
+			if err := c.svc.JoinRoom(msg.ConversationID, p, cl); err != nil {
+				c.wsSendError(cl, err.Error())
+				continue
+			}
 			payload, err := c.svc.PostMessage(msg.ConversationID, msg.Body, p)
 			if err != nil {
 				c.wsSendError(cl, err.Error())

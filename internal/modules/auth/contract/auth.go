@@ -8,8 +8,8 @@ type LoginInput struct {
 }
 
 type LoginOutput struct {
-	Token    string
-	Employee domain.Employee
+	Token    string          `json:"token"`
+	Employee domain.Employee `json:"employee"`
 }
 
 type MemberLoginInput struct {
@@ -18,8 +18,8 @@ type MemberLoginInput struct {
 }
 
 type MemberLoginOutput struct {
-	Token  string
-	Member domain.Member
+	Token  string        `json:"token"`
+	Member domain.Member `json:"member"`
 }
 
 type AuthService interface {

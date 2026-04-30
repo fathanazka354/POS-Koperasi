@@ -425,6 +425,13 @@
       var ws = new WebSocket(url);
       ws.onopen = function () {
         log(which === "b" ? "b" : "s", logPrefix + " connected");
+        var convEl = byId("convId");
+        var cid = convEl ? Number(convEl.value) : 0;
+        if (cid > 0 && ws.readyState === 1) {
+          var autoJoin = JSON.stringify({ type: "join", conversation_id: cid });
+          ws.send(autoJoin);
+          log(which === "b" ? "b" : "s", { sent: "auto-join setelah connect", payload: autoJoin });
+        }
       };
       ws.onmessage = function (ev) {
         var msg;
@@ -441,8 +448,13 @@
         if (msg && msg.type === "message" && msg.message) {
           var m = msg.message;
           var role = m.sender_role === "buyer" ? "buyer" : "seller";
+          // Hindari bubble ganda hanya di panel PENGIRIM (echo broadcast).
+          // Jangan pakai skipNextWsEcho di panel lawan: variabel ini global, dulu
+          // membuat pesan pembeli tidak tampil di sisi penjual (karena teks & role sama).
           var sk = skipNextWsEcho[role];
-          if (sk && sk.body === m.body && Date.now() - sk.t < 8000) {
+          var isOwnPanel =
+            (which === "b" && role === "buyer") || (which === "s" && role === "seller");
+          if (isOwnPanel && sk && sk.body === m.body && Date.now() - sk.t < 8000) {
             skipNextWsEcho[role] = null;
             return;
           }
