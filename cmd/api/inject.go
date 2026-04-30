@@ -10,31 +10,67 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/jmoiron/sqlx"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/fx"
 
 	"github.com/yourname/pos-koperasi/internal/config"
 	"github.com/yourname/pos-koperasi/internal/middleware"
 	midtransClient "github.com/yourname/pos-koperasi/internal/midtrans"
+
+	// Auth
 	authcontract "github.com/yourname/pos-koperasi/internal/modules/auth/contract"
 	authcontroller "github.com/yourname/pos-koperasi/internal/modules/auth/controller"
 	authrouter "github.com/yourname/pos-koperasi/internal/modules/auth/router"
 	authsvc "github.com/yourname/pos-koperasi/internal/modules/auth/service/impl"
+
+	// Chat
 	chatcontract "github.com/yourname/pos-koperasi/internal/modules/chat/contract"
 	chatcontroller "github.com/yourname/pos-koperasi/internal/modules/chat/controller"
 	chatrepo "github.com/yourname/pos-koperasi/internal/modules/chat/repository/impl"
 	chatrouter "github.com/yourname/pos-koperasi/internal/modules/chat/router"
 	chatsvc "github.com/yourname/pos-koperasi/internal/modules/chat/service/impl"
 	chatutil "github.com/yourname/pos-koperasi/internal/modules/chat/utility"
+
+	// Product
 	productcontract "github.com/yourname/pos-koperasi/internal/modules/product/contract"
 	productcontroller "github.com/yourname/pos-koperasi/internal/modules/product/controller"
 	productrepo "github.com/yourname/pos-koperasi/internal/modules/product/repository/impl"
 	productrouter "github.com/yourname/pos-koperasi/internal/modules/product/router"
 	productsvc "github.com/yourname/pos-koperasi/internal/modules/product/service/impl"
+
+	// Transaction
 	txcontract "github.com/yourname/pos-koperasi/internal/modules/transaction/contract"
 	txcontroller "github.com/yourname/pos-koperasi/internal/modules/transaction/controller"
 	txrepo "github.com/yourname/pos-koperasi/internal/modules/transaction/repository/impl"
 	txrouter "github.com/yourname/pos-koperasi/internal/modules/transaction/router"
 	txsvc "github.com/yourname/pos-koperasi/internal/modules/transaction/service/impl"
+
+	// Notification
+	notifcontract "github.com/yourname/pos-koperasi/internal/modules/notification/contract"
+	notifcontroller "github.com/yourname/pos-koperasi/internal/modules/notification/controller"
+	notifrepo "github.com/yourname/pos-koperasi/internal/modules/notification/repository/impl"
+	notifmem "github.com/yourname/pos-koperasi/internal/modules/notification/repository/memory"
+	notifrouter "github.com/yourname/pos-koperasi/internal/modules/notification/router"
+	notifsvc "github.com/yourname/pos-koperasi/internal/modules/notification/service/impl"
+	notifws "github.com/yourname/pos-koperasi/internal/modules/notification/ws"
+
+	// Address
+	addrcontract "github.com/yourname/pos-koperasi/internal/modules/address/contract"
+	addrcontroller "github.com/yourname/pos-koperasi/internal/modules/address/controller"
+	addrrepo "github.com/yourname/pos-koperasi/internal/modules/address/repository/impl"
+	addrrouter "github.com/yourname/pos-koperasi/internal/modules/address/router"
+	addrsvc "github.com/yourname/pos-koperasi/internal/modules/address/service/impl"
+
+	// Voucher
+	vouchercontract "github.com/yourname/pos-koperasi/internal/modules/voucher/contract"
+	voucherrepo "github.com/yourname/pos-koperasi/internal/modules/voucher/repository/impl"
+	vouchersvc "github.com/yourname/pos-koperasi/internal/modules/voucher/service/impl"
+
+	// Shop
+	shopcontract "github.com/yourname/pos-koperasi/internal/modules/shop/contract"
+	shopcontroller "github.com/yourname/pos-koperasi/internal/modules/shop/controller"
+	shoprouter "github.com/yourname/pos-koperasi/internal/modules/shop/router"
+	shopsvc "github.com/yourname/pos-koperasi/internal/modules/shop/service/impl"
 )
 
 func provideDB(lc fx.Lifecycle, cfg *config.Config) (*sqlx.DB, error) {
@@ -43,11 +79,23 @@ func provideDB(lc fx.Lifecycle, cfg *config.Config) (*sqlx.DB, error) {
 		return nil, err
 	}
 	lc.Append(fx.Hook{
-		OnStop: func(ctx context.Context) error {
-			return db.Close()
-		},
+		OnStop: func(ctx context.Context) error { return db.Close() },
 	})
 	return db, nil
+}
+
+func provideMongoDB(lc fx.Lifecycle, cfg *config.Config) *mongo.Database {
+	db, err := config.OpenMongo(cfg)
+	if err != nil {
+		log.Printf("MongoDB tidak tersedia, gunakan in-memory notifications: %v", err)
+		return nil
+	}
+	lc.Append(fx.Hook{
+		OnStop: func(ctx context.Context) error {
+			return db.Client().Disconnect(ctx)
+		},
+	})
+	return db
 }
 
 func provideTransactionRepository(db *sqlx.DB) txcontract.TransactionRepository {
@@ -62,6 +110,22 @@ func provideProductRepository(db *sqlx.DB) productcontract.ProductRepository {
 	return productrepo.New(db)
 }
 
+func provideAddressRepository(db *sqlx.DB) addrcontract.AddressRepository {
+	return addrrepo.New(db)
+}
+
+func provideVoucherRepository(db *sqlx.DB) vouchercontract.VoucherRepository {
+	return voucherrepo.New(db)
+}
+
+func provideNotificationRepository(mongoDB *mongo.Database) notifcontract.NotificationRepository {
+	if mongoDB == nil {
+		log.Println("MongoDB nil — menggunakan in-memory notification repository")
+		return notifmem.New()
+	}
+	return notifrepo.New(mongoDB)
+}
+
 func provideAuthService(db *sqlx.DB, cfg *config.Config) authcontract.AuthService {
 	return authsvc.New(db, cfg.JWTSecret, cfg.JWTExpiry)
 }
@@ -69,8 +133,12 @@ func provideAuthService(db *sqlx.DB, cfg *config.Config) authcontract.AuthServic
 func provideTransactionService(
 	repo txcontract.TransactionRepository,
 	mt *midtransClient.Client,
-) txcontract.TransactionService {
+) *txsvc.Service {
 	return txsvc.New(repo, mt)
+}
+
+func provideTransactionServiceAsContract(svc *txsvc.Service) txcontract.TransactionService {
+	return svc
 }
 
 func provideProductService(repo productcontract.ProductRepository) productcontract.ProductService {
@@ -85,12 +153,50 @@ func provideChatService(
 	return chatsvc.New(db, repo, hub)
 }
 
+func provideNotificationService(
+	repo notifcontract.NotificationRepository,
+	hub *notifws.NotifyHub,
+) notifcontract.NotificationService {
+	return notifsvc.New(repo, hub)
+}
+
+func provideAddressService(repo addrcontract.AddressRepository) addrcontract.AddressService {
+	return addrsvc.New(repo)
+}
+
+func provideVoucherService(repo vouchercontract.VoucherRepository) vouchercontract.VoucherService {
+	return vouchersvc.New(repo)
+}
+
+func provideShopService(
+	txRepo txcontract.TransactionRepository,
+	addrRepo addrcontract.AddressRepository,
+	voucherSvc vouchercontract.VoucherService,
+	mt *midtransClient.Client,
+) *shopsvc.Service {
+	return shopsvc.New(txRepo, addrRepo, voucherSvc, mt)
+}
+
+// wireNotification menyuntikkan notifyFn ke transaction service dan shop service.
+func wireNotification(
+	txService *txsvc.Service,
+	shopService *shopsvc.Service,
+	notifSvc notifcontract.NotificationService,
+) {
+	txService.WithNotify(notifSvc.Notify)
+	shopService.WithNotify(notifSvc.Notify)
+}
+
 func newTxController(svc txcontract.TransactionService, cfg *config.Config) *txcontroller.Controller {
 	return txcontroller.New(svc, cfg.MidtransServerKey)
 }
 
 func newChatController(svc chatcontract.ChatService, cfg *config.Config) *chatcontroller.Controller {
 	return chatcontroller.New(svc, cfg.JWTSecret)
+}
+
+func newNotifController(svc notifcontract.NotificationService, hub *notifws.NotifyHub, cfg *config.Config) *notifcontroller.Controller {
+	return notifcontroller.New(svc, hub, cfg.JWTSecret)
 }
 
 func newHTTPRouter(
@@ -100,6 +206,9 @@ func newHTTPRouter(
 	chatR *chatrouter.Router,
 	productR *productrouter.Router,
 	productCtl *productcontroller.Controller,
+	notifR *notifrouter.Router,
+	addrR *addrrouter.Router,
+	shopR *shoprouter.Router,
 ) http.Handler {
 	r := chi.NewRouter()
 
@@ -119,11 +228,27 @@ func newHTTPRouter(
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(chatDemoHTML)
 	})
+	r.Get("/demo/shop", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(shopDemoHTML)
+	})
 
 	r.Route("/api/v1", func(r chi.Router) {
 		authR.Register(r)
 		txR.RegisterPublic(r)
 		chatR.Register(r, cfg.JWTSecret)
+
+		// Public shop endpoints (tanpa auth)
+		productR.RegisterPublic(r)
+
+		// Notification WS + member routes
+		notifR.Register(r, cfg.JWTSecret)
+
+		// Address member routes
+		addrR.Register(r, cfg.JWTSecret)
+
+		// Shop checkout + orders
+		shopR.Register(r, cfg.JWTSecret)
 
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.JWTAuth(cfg.JWTSecret))
@@ -149,6 +274,11 @@ func registerHTTPServer(lc fx.Lifecycle, cfg *config.Config, handler http.Handle
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			log.Printf("Server running on %s [%s]", srv.Addr, cfg.AppEnv)
+			log.Printf("Demo Shop  : http://localhost:%s/demo/shop", cfg.AppPort)
+			log.Printf("Webhook    : POST http://localhost:%s/api/v1/midtrans/webhook", cfg.AppPort)
+			log.Printf("==> Untuk terima webhook dari Midtrans, jalankan: ngrok start api8080")
+			log.Printf("    Lalu set Notification URL di dashboard Midtrans ke:")
+			log.Printf("    https://<ngrok-url>/api/v1/midtrans/webhook")
 			go func() {
 				if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 					log.Printf("HTTP server: %v", err)
@@ -156,9 +286,7 @@ func registerHTTPServer(lc fx.Lifecycle, cfg *config.Config, handler http.Handle
 			}()
 			return nil
 		},
-		OnStop: func(ctx context.Context) error {
-			return srv.Shutdown(ctx)
-		},
+		OnStop: func(ctx context.Context) error { return srv.Shutdown(ctx) },
 	})
 }
 
@@ -167,25 +295,54 @@ func fxModule() fx.Option {
 		fx.Provide(
 			config.Load,
 			provideDB,
+			provideMongoDB,
 			midtransClient.NewClient,
 			chatutil.NewHub,
+			notifws.NewNotifyHub,
+
+			// Repositories
 			provideTransactionRepository,
 			provideChatRepository,
 			provideProductRepository,
+			provideAddressRepository,
+			provideVoucherRepository,
+			provideNotificationRepository,
+
+			// Services
 			provideAuthService,
 			provideTransactionService,
+			provideTransactionServiceAsContract,
 			provideProductService,
 			provideChatService,
+			provideNotificationService,
+			provideAddressService,
+			provideVoucherService,
+			provideShopService,
+			func(s *shopsvc.Service) shopcontract.ShopService { return s },
+
+			// Controllers
 			authcontroller.New,
-			authrouter.New,
 			newTxController,
-			txrouter.New,
 			productcontroller.New,
-			productrouter.New,
 			newChatController,
+			newNotifController,
+			addrcontroller.New,
+			func(svc shopcontract.ShopService) *shopcontroller.Controller { return shopcontroller.New(svc) },
+
+			// Routers
+			authrouter.New,
+			txrouter.New,
+			productrouter.New,
 			chatrouter.New,
+			notifrouter.New,
+			addrrouter.New,
+			func(ctl *shopcontroller.Controller) *shoprouter.Router { return shoprouter.New(ctl) },
+
 			newHTTPRouter,
 		),
-		fx.Invoke(registerHTTPServer),
+		fx.Invoke(
+			registerHTTPServer,
+			wireNotification, // hubungkan notifyFn ke transaction service
+		),
 	)
 }

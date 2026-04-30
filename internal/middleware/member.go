@@ -61,3 +61,21 @@ func GetMemberClaims(r *http.Request) *MemberClaims {
 	claims, _ := r.Context().Value(MemberKey).(*MemberClaims)
 	return claims
 }
+
+// ParseMemberToken mem-parse token string menjadi MemberClaims (untuk WebSocket query param).
+func ParseMemberToken(tokenStr, jwtSecret string) (*MemberClaims, error) {
+	claims := &MemberClaims{}
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return []byte(jwtSecret), nil
+	})
+	if err != nil || !token.Valid {
+		return nil, jwt.ErrSignatureInvalid
+	}
+	if claims.Issuer != JWTIssuerMember || claims.MemberID == 0 {
+		return nil, jwt.ErrSignatureInvalid
+	}
+	return claims, nil
+}

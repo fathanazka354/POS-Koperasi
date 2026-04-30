@@ -73,6 +73,16 @@ func (r *Repository) GetItemsByTransactionID(txID int64) ([]domain.TransactionIt
 	return items, nil
 }
 
+func (r *Repository) GetTransactionsByMember(memberID int) ([]domain.Transaction, error) {
+	var rows []domain.Transaction
+	if err := r.db.Select(&rows,
+		`SELECT * FROM transactions WHERE member_id=$1 ORDER BY created_at DESC LIMIT 50`,
+		memberID); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 func (r *Repository) CreatePendingTransaction(input contract.ProcessTransactionInput) (int64, error) {
 	tx, err := r.db.Beginx()
 	if err != nil {
@@ -88,8 +98,9 @@ func (r *Repository) CreatePendingTransaction(input contract.ProcessTransactionI
 	query := `
 		INSERT INTO transactions
 			(branch_id, register_id, employee_id, member_id, invoice_no,
-			 subtotal, discount, tax, grand_total, status)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending')
+			 subtotal, discount, tax, grand_total, status,
+			 address_id, voucher_id, voucher_discount)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending',$10,$11,$12)
 		RETURNING id
 	`
 	err = tx.QueryRow(query,
@@ -102,6 +113,9 @@ func (r *Repository) CreatePendingTransaction(input contract.ProcessTransactionI
 		input.Transaction.Discount,
 		input.Transaction.Tax,
 		input.Transaction.GrandTotal,
+		input.Transaction.AddressID,
+		input.Transaction.VoucherID,
+		input.Transaction.VoucherDiscount,
 	).Scan(&txID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert transaction: %w", err)

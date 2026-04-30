@@ -22,6 +22,8 @@ run_migrate() {
   "${PSQL[@]}" -f "$ROOT_DIR/migrations/001_schema.sql"
   echo "Running chat migration..."
   "${PSQL[@]}" -f "$ROOT_DIR/migrations/002_chat.sql"
+  echo "Running shop migration..."
+  "${PSQL[@]}" -f "$ROOT_DIR/migrations/003_shop.sql"
 }
 
 run_seed() {

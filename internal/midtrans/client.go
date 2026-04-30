@@ -271,6 +271,48 @@ func (c *Client) CreateChargeGoPay(orderID string, amount float64) (*chargeGoPay
 	return &result, paymentURL, raw, nil
 }
 
+// ─── Get Transaction Status ──────────────────────────────────────────────────
+
+// TransactionStatusResponse berisi status transaksi dari Midtrans.
+type TransactionStatusResponse struct {
+	TransactionID     string            `json:"transaction_id"`
+	OrderID           string            `json:"order_id"`
+	TransactionStatus string            `json:"transaction_status"`
+	PaymentType       string            `json:"payment_type"`
+	GrossAmount       string            `json:"gross_amount"`
+	StatusCode        string            `json:"status_code"`
+	StatusMessage     string            `json:"status_message"`
+	FraudStatus       string            `json:"fraud_status"`
+}
+
+// GetTransactionStatus query status transaksi ke Midtrans (untuk polling).
+func (c *Client) GetTransactionStatus(orderID string) (*TransactionStatusResponse, error) {
+	url := fmt.Sprintf("%s/v2/%s/status", c.cfg.MidtransBaseURL, orderID)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.SetBasicAuth(c.cfg.MidtransServerKey, "")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("midtrans get status failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var result TransactionStatusResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse midtrans status response: %w", err)
+	}
+	// status_code 404 berarti order tidak ditemukan di Midtrans (belum dibuat charge atau sudah expire)
+	if result.StatusCode == "404" {
+		return nil, fmt.Errorf("order %s tidak ditemukan di Midtrans", orderID)
+	}
+	return &result, nil
+}
+
 func firstActionURL(actions []chargeAction, actionName string) string {
 	for _, a := range actions {
 		if a.Name == actionName {

@@ -1,4 +1,7 @@
-# POS Koperasi Minimarket — Golang + Midtrans
+# POS Koperasi Minimarket — Golang + Midtrans + MongoDB
+
+Demo Shop: `http://localhost:8080/demo/shop`
+Demo Chat: `http://localhost:8080/demo/chat`
 
 Dokumentasi API lengkap (request body, response, error): [`docs/API.md`](docs/API.md).
 
@@ -23,7 +26,11 @@ pos-koperasi/
 │   │   ├── auth/             ← domain, contract, service/impl, controller+dto, router
 │   │   ├── chat/             ← + utility (WebSocket hub), repository/impl, …
 │   │   ├── product/
-│   │   └── transaction/
+│   │   ├── transaction/
+│   │   ├── notification/     ← MongoDB + WebSocket push (notif bell)
+│   │   ├── address/          ← Alamat pengiriman member (multi-address)
+│   │   ├── voucher/          ← Kode diskon (percent / fixed)
+│   │   └── shop/             ← Member checkout, riwayat pesanan
 │   ├── seed/                 ← Seeder per entitas (branch, product, …)
 │   └── midtrans/             ← Client Midtrans (Core /v2/charge), notification
 ├── migrations/001_init.sql   ← DDL + seed legacy (opsional)
@@ -395,3 +402,77 @@ curl -X POST http://localhost:8080/api/v1/midtrans/webhook \
     "signature_key": "PASTE_SIGNATURE_KEY_SESUAI_MIDTRANS"
   }'
 ```
+
+---
+
+## Demo Shop (Checkout + Notifikasi Internal)
+
+Buka `http://localhost:8080/demo/shop` di browser.
+
+### Prasyarat tambahan
+
+MongoDB harus berjalan (untuk notifikasi persisten). Jika tidak ada, sistem otomatis menggunakan
+in-memory fallback — notifikasi tetap berfungsi selama session server aktif.
+
+```bash
+# Jalankan MongoDB lokal (jika belum)
+brew services start mongodb-community   # macOS
+# atau
+docker run -d -p 27017:27017 mongo
+
+# Tambahkan ke .env
+MONGO_URI=mongodb://localhost:27017
+MONGO_DB_NAME=pos_koperasi
+
+# Jalankan migrasi shop (alamat + voucher)
+make migrate
+
+# Jalankan server
+make run
+```
+
+### Alur demo
+
+1. Buka `http://localhost:8080/demo/shop`
+2. Browse produk di halaman utama — tidak perlu login
+3. Klik produk → halaman detail → atur jumlah → Tambah ke Keranjang
+4. Klik ikon keranjang 🛍️ → Checkout
+5. Jika belum login, muncul modal login:
+   - Kode Anggota: `MBR001`
+   - No. Telepon: `081234567890`
+6. Setelah login, masuk halaman checkout 3 langkah:
+   - Langkah 1 — Pilih/tambah alamat pengiriman
+   - Langkah 2 — Input kode voucher (coba `HEMAT10` atau `HEMAT5K`), lihat ringkasan
+   - Langkah 3 — Pilih metode bayar (cash/QRIS/VA/GoPay) → Bayar
+7. Cash: langsung confirmed + notifikasi terkirim
+   QRIS/VA: tampil QR/nomor VA → klik "Cek Status" atau tunggu webhook Midtrans
+8. Klik ikon lonceng 🔔 di header → daftar notifikasi
+   - Notifikasi belum dibaca: background lebih gelap (merah muda)
+   - Klik notifikasi → diarahkan ke detail transaksi
+9. WebSocket real-time: bell badge muncul otomatis tanpa refresh jika notif masuk
+
+### API shop yang tersedia
+
+| Method | Endpoint | Keterangan |
+|--------|----------|------------|
+| GET | `/api/v1/shop/products` | Daftar produk (public, `?search=`) |
+| GET | `/api/v1/shop/products/{id}` | Detail produk (public) |
+| POST | `/api/v1/shop/checkout` | Checkout member (JWT member) |
+| GET | `/api/v1/shop/orders` | Riwayat pesanan member |
+| GET | `/api/v1/shop/orders/{invoiceNo}` | Detail pesanan |
+| GET | `/api/v1/shop/orders/{invoiceNo}/status` | Cek status pembayaran |
+| GET | `/api/v1/member/addresses` | Daftar alamat member |
+| POST | `/api/v1/member/addresses` | Tambah alamat |
+| PUT | `/api/v1/member/addresses/{id}/default` | Set alamat default |
+| GET | `/api/v1/member/notifications` | Daftar notifikasi (MongoDB) |
+| PUT | `/api/v1/member/notifications/{id}/read` | Tandai dibaca |
+| PUT | `/api/v1/member/notifications/read-all` | Tandai semua dibaca |
+| GET | `/api/v1/ws/notify?token=JWT` | WebSocket push notifikasi |
+
+### Voucher demo yang tersedia
+
+| Kode | Jenis | Nilai | Min. Belanja |
+|------|-------|-------|--------------|
+| `HEMAT10` | Persen | 10% (maks Rp 50.000) | Rp 10.000 |
+| `HEMAT5K` | Nominal | Rp 5.000 | Rp 20.000 |
+

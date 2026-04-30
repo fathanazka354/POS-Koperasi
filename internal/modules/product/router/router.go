@@ -18,3 +18,9 @@ func (rt *Router) RegisterProtected(r chi.Router) {
 	r.Get("/products/low-stock", rt.product.GetLowStock)
 }
 
+// RegisterPublic mendaftarkan endpoint produk yang tidak membutuhkan autentikasi (shop demo).
+func (rt *Router) RegisterPublic(r chi.Router) {
+	r.Get("/shop/products", rt.product.ListAll)
+	r.Get("/shop/products/{id}", rt.product.GetByIDPublic)
+}
+

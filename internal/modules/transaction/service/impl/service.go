@@ -11,13 +11,22 @@ import (
 	"github.com/yourname/pos-koperasi/internal/modules/transaction/domain"
 )
 
+// NotifyFn adalah fungsi callback untuk mengirim notifikasi ke member.
+type NotifyFn func(memberID int, notifType, title, body string, data map[string]interface{}) error
+
 type Service struct {
 	repo     contract.TransactionRepository
 	midtrans *midtrans.Client
+	notifyFn NotifyFn
 }
 
 func New(repo contract.TransactionRepository, midtransClient *midtrans.Client) *Service {
 	return &Service{repo: repo, midtrans: midtransClient}
+}
+
+// WithNotify menyuntikkan fungsi notifikasi (dipanggil dari inject.go setelah semua modul siap).
+func (s *Service) WithNotify(fn NotifyFn) {
+	s.notifyFn = fn
 }
 
 func (s *Service) CreateTransaction(input contract.CreateTransactionInput, employeeID int) (*contract.CreateTransactionOutput, error) {
@@ -61,7 +70,7 @@ func (s *Service) CreateTransaction(input contract.CreateTransactionInput, emplo
 		Transaction: domain.Transaction{
 			BranchID:   input.BranchID,
 			RegisterID: input.RegisterID,
-			EmployeeID: employeeID,
+			EmployeeID: &employeeID,
 			MemberID:   memberID,
 			InvoiceNo:  invoiceNo,
 			Subtotal:   subtotal,
@@ -212,7 +221,7 @@ func (s *Service) HandleMidtransNotification(payload midtrans.NotificationPayloa
 		return fmt.Errorf("failed to parse midtrans gross_amount: %w", err)
 	}
 
-	return s.repo.SettleTransaction(contract.SettleInput{
+	if err := s.repo.SettleTransaction(contract.SettleInput{
 		TransactionID: trx.ID,
 		BranchID:      trx.BranchID,
 		MemberID:      trx.MemberID,
@@ -223,7 +232,25 @@ func (s *Service) HandleMidtransNotification(payload midtrans.NotificationPayloa
 			ChangeAmount: 0,
 			ReferenceNo:  payload.TransactionID,
 		},
-	})
+	}); err != nil {
+		return err
+	}
+
+	// Push notifikasi ke member setelah pembayaran terkonfirmasi
+	if s.notifyFn != nil && trx.MemberID != nil {
+		_ = s.notifyFn(
+			*trx.MemberID,
+			"payment_success",
+			"Pembayaran Berhasil!",
+			fmt.Sprintf("Pesanan %s telah terkonfirmasi. Terima kasih!", trx.InvoiceNo),
+			map[string]interface{}{
+				"transaction_id": trx.ID,
+				"invoice_no":     trx.InvoiceNo,
+				"grand_total":    trx.GrandTotal,
+			},
+		)
+	}
+	return nil
 }
 
 func mapMidtransMethod(paymentType string) string {

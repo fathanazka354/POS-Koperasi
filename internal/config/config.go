@@ -25,6 +25,10 @@ type Config struct {
 	// Midtrans
 	MidtransServerKey string
 	MidtransBaseURL   string
+
+	// MongoDB (untuk notifikasi)
+	MongoURI    string
+	MongoDBName string
 }
 
 var Cfg *Config
@@ -47,6 +51,8 @@ func Load() *Config {
 		JWTExpiry:         getEnv("JWT_EXPIRY_HOURS", "24"),
 		MidtransServerKey: getEnv("MIDTRANS_SERVER_KEY", ""),
 		MidtransBaseURL:   getEnv("MIDTRANS_BASE_URL", "https://api.sandbox.midtrans.com"),
+		MongoURI:          getEnv("MONGO_URI", "mongodb://localhost:27017"),
+		MongoDBName:       getEnv("MONGO_DB_NAME", "pos_koperasi"),
 	}
 	return Cfg
 }

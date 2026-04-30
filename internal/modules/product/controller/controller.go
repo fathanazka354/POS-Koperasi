@@ -2,6 +2,7 @@ package controller
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/yourname/pos-koperasi/internal/middleware"
@@ -43,6 +44,34 @@ func (c *Controller) GetByBarcode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Success(w, "Produk ditemukan", product)
+}
+
+// GET /api/v1/shop/products?search=&page=
+func (c *Controller) ListAll(w http.ResponseWriter, r *http.Request) {
+	search := r.URL.Query().Get("search")
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	// Gunakan branch_id=1 sebagai default untuk demo shop
+	products, err := c.svc.ListAll(1, search, page)
+	if err != nil {
+		response.InternalError(w, err.Error())
+		return
+	}
+	response.Success(w, "Daftar produk", products)
+}
+
+// GET /api/v1/shop/products/{id}
+func (c *Controller) GetByIDPublic(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil || id == 0 {
+		response.BadRequest(w, "ID produk tidak valid")
+		return
+	}
+	product, err := c.svc.GetByID(id, 1)
+	if err != nil {
+		response.NotFound(w, "Produk tidak ditemukan")
+		return
+	}
+	response.Success(w, "Detail produk", product)
 }
 
 // GET /api/v1/products/low-stock

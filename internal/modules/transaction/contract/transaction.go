@@ -61,6 +61,8 @@ type TransactionRepository interface {
 	GetMemberByCode(memberCode string) (*authdomain.Member, error)
 	CreatePendingTransaction(input ProcessTransactionInput) (int64, error)
 	GetTransactionByID(txID int64) (*domain.Transaction, error)
+	GetItemsByTransactionID(txID int64) ([]domain.TransactionItem, error)
+	GetTransactionsByMember(memberID int) ([]domain.Transaction, error)
 	SettleTransaction(input SettleInput) error
 	CancelTransaction(transactionID int64) error
 	PaymentExistsByRef(referenceNo string) (bool, error)
