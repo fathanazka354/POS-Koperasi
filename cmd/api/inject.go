@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"embed"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 
@@ -72,6 +74,9 @@ import (
 	shoprouter "github.com/yourname/pos-koperasi/internal/modules/shop/router"
 	shopsvc "github.com/yourname/pos-koperasi/internal/modules/shop/service/impl"
 )
+
+//go:embed all:demo
+var demoAssets embed.FS
 
 func provideDB(lc fx.Lifecycle, cfg *config.Config) (*sqlx.DB, error) {
 	db, err := config.OpenDB(cfg)
@@ -149,8 +154,9 @@ func provideChatService(
 	db *sqlx.DB,
 	repo chatcontract.ChatRepository,
 	hub *chatutil.Hub,
+	presence *chatutil.Presence,
 ) chatcontract.ChatService {
-	return chatsvc.New(db, repo, hub)
+	return chatsvc.New(db, repo, hub, presence)
 }
 
 func provideNotificationService(
@@ -210,6 +216,12 @@ func newHTTPRouter(
 	addrR *addrrouter.Router,
 	shopR *shoprouter.Router,
 ) http.Handler {
+	demoFS, err := fs.Sub(demoAssets, "demo")
+	if err != nil {
+		log.Fatalf("demo static: %v", err)
+	}
+	demoFileServer := http.FileServer(http.FS(demoFS))
+
 	r := chi.NewRouter()
 
 	r.Use(chimiddleware.Logger)
@@ -222,15 +234,18 @@ func newHTTPRouter(
 	}))
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/demo/chat", http.StatusTemporaryRedirect)
+		http.Redirect(w, r, "/demo/", http.StatusTemporaryRedirect)
 	})
-	r.Get("/demo/chat", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write(chatDemoHTML)
+	r.Get("/demo", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/demo/", http.StatusTemporaryRedirect)
 	})
-	r.Get("/demo/shop", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write(shopDemoHTML)
+	r.Handle("/demo/*", http.StripPrefix("/demo", demoFileServer))
+	// Backward-compat aliases
+	r.Get("/demo/chat", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/demo/", http.StatusTemporaryRedirect)
+	})
+	r.Get("/demo/shop", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/demo/", http.StatusTemporaryRedirect)
 	})
 
 	r.Route("/api/v1", func(r chi.Router) {
@@ -255,6 +270,7 @@ func newHTTPRouter(
 
 			txR.RegisterProtected(r)
 			productR.RegisterProtected(r)
+			productR.RegisterSeller(r)
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole("supervisor", "admin"))
@@ -274,7 +290,7 @@ func registerHTTPServer(lc fx.Lifecycle, cfg *config.Config, handler http.Handle
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			log.Printf("Server running on %s [%s]", srv.Addr, cfg.AppEnv)
-			log.Printf("Demo Shop  : http://localhost:%s/demo/shop", cfg.AppPort)
+			log.Printf("Demo App   : http://localhost:%s/demo", cfg.AppPort)
 			log.Printf("Webhook    : POST http://localhost:%s/api/v1/midtrans/webhook", cfg.AppPort)
 			log.Printf("==> Untuk terima webhook dari Midtrans, jalankan: ngrok start api8080")
 			log.Printf("    Lalu set Notification URL di dashboard Midtrans ke:")
@@ -298,6 +314,7 @@ func fxModule() fx.Option {
 			provideMongoDB,
 			midtransClient.NewClient,
 			chatutil.NewHub,
+			chatutil.NewPresence,
 			notifws.NewNotifyHub,
 
 			// Repositories

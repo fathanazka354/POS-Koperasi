@@ -16,5 +16,7 @@ func New(auth *controller.Controller) *Router {
 func (rt *Router) Register(r chi.Router) {
 	r.Post("/auth/login", rt.auth.Login)
 	r.Post("/auth/member-login", rt.auth.MemberLogin)
+	r.Post("/auth/member-refresh", rt.auth.MemberRefresh)
+	r.Post("/auth/employee-refresh", rt.auth.EmployeeRefresh)
 }
 

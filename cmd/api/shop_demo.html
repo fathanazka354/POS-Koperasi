@@ -80,6 +80,24 @@ header h1{font-size:1.3rem;flex:1;cursor:pointer}
 .voucher-row input{flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:.9rem}
 .voucher-badge{background:#e8f5e9;color:#2e7d32;padding:6px 10px;border-radius:6px;font-size:.82rem;font-weight:600;display:inline-flex;align-items:center;gap:6px}
 .voucher-badge .rm{cursor:pointer;font-size:1rem;line-height:1}
+/* ===== VOUCHER LIST ===== */
+.voucher-list{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.voucher-card{border:2px solid #eee;border-radius:8px;padding:10px 12px;cursor:pointer;transition:all .2s;position:relative}
+.voucher-card:hover{border-color:#ee4d2d;background:#fff9f8}
+.voucher-card.selected{border-color:#ee4d2d;background:#fff9f8}
+.voucher-card.disabled{opacity:.45;cursor:not-allowed;background:#f9f9f9}
+.vc-type{display:inline-block;font-size:.68rem;font-weight:700;padding:2px 6px;border-radius:4px;margin-bottom:4px}
+.vc-type.percent{background:#e3f2fd;color:#1565c0}
+.vc-type.fixed{background:#f3e5f5;color:#6a1b9a}
+.vc-type.ongkir{background:#e8f5e9;color:#2e7d32}
+.vc-code{font-size:.85rem;font-weight:700;color:#333;margin-bottom:2px}
+.vc-name{font-size:.8rem;color:#555;margin-bottom:4px}
+.vc-min{font-size:.72rem;color:#999}
+.vc-disc{font-size:.88rem;font-weight:700;color:#ee4d2d}
+.voucher-tabs{display:flex;gap:6px;margin-bottom:10px}
+.voucher-tab{padding:5px 12px;border-radius:20px;font-size:.8rem;font-weight:600;cursor:pointer;border:1px solid #ddd;background:#fff;color:#666;transition:all .15s}
+.voucher-tab.active{background:#ee4d2d;color:#fff;border-color:#ee4d2d}
+.voucher-err{color:#c62828;font-size:.82rem;margin-top:6px;display:none}
 .order-summary{font-size:.9rem}
 .order-row{display:flex;justify-content:space-between;padding:4px 0}
 .order-row.total{font-weight:700;font-size:1rem;border-top:1px solid #eee;margin-top:6px;padding-top:8px}
@@ -109,7 +127,8 @@ header h1{font-size:1.3rem;flex:1;cursor:pointer}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:150;display:none}
 .overlay.active{display:block}
 /* ===== ORDERS ===== */
-.order-card{background:#fff;border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.08);display:flex;justify-content:space-between;align-items:center}
+.order-card{background:#fff;border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.08);display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.order-card-pending{border-left:3px solid #f57c00;background:#fffde7}
 .order-card .oc-inv{font-weight:700;font-size:.9rem}
 .order-card .oc-date{font-size:.8rem;color:#888}
 .status-badge{padding:4px 10px;border-radius:20px;font-size:.78rem;font-weight:700}
@@ -252,11 +271,29 @@ header{z-index:400!important}
   <!-- Step 2: Voucher + Summary -->
   <div id="checkout-step2" style="display:none">
     <div class="section-card">
-      <h4>🏷️ Kode Voucher (Opsional)</h4>
-      <div class="voucher-row">
-        <input type="text" id="voucher-input" placeholder="Masukkan kode voucher (cth: HEMAT10)" />
-        <button class="btn-outline-sm" onclick="applyVoucher()">Pakai</button>
+      <h4>🏷️ Pilih / Masukkan Voucher (Opsional)</h4>
+
+      <!-- Tabs -->
+      <div class="voucher-tabs">
+        <button class="voucher-tab active" id="vtab-list" onclick="switchVoucherTab('list')">Pilih dari Daftar</button>
+        <button class="voucher-tab" id="vtab-input" onclick="switchVoucherTab('input')">Masukkan Kode</button>
       </div>
+
+      <!-- Tab: Daftar Voucher -->
+      <div id="vpanel-list">
+        <div id="voucher-list-grid" class="voucher-list"><div class="loader">Memuat voucher...</div></div>
+      </div>
+
+      <!-- Tab: Input Manual -->
+      <div id="vpanel-input" style="display:none">
+        <div class="voucher-row">
+          <input type="text" id="voucher-input" placeholder="Masukkan kode voucher (cth: HEMAT10)" style="text-transform:uppercase" />
+          <button class="btn-outline-sm" id="btn-apply-voucher" onclick="applyVoucher()">Pakai</button>
+        </div>
+        <div class="voucher-err" id="voucher-err"></div>
+      </div>
+
+      <!-- Applied voucher badge -->
       <div id="voucher-result" style="margin-top:8px"></div>
     </div>
     <div class="section-card">
@@ -303,7 +340,10 @@ header{z-index:400!important}
 <!-- ===== VIEW: ORDERS ===== -->
 <div class="view" id="view-orders">
   <button class="back-btn" onclick="showView('home')">← Kembali ke Beranda</button>
-  <h3 style="margin-bottom:12px;font-size:1.1rem">📦 Pesanan Saya</h3>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="font-size:1.1rem">📦 Riwayat Transaksi</h3>
+    <button class="btn-outline-sm" onclick="loadOrders()">🔄 Refresh</button>
+  </div>
   <div id="orders-list"></div>
 </div>
 
@@ -355,9 +395,13 @@ window.addEventListener('DOMContentLoaded', () => {
 function renderAuthArea() {
   const el = document.getElementById('auth-area');
   if (authMember) {
-    el.innerHTML = `<span id="username-display">👤 ${authMember.full_name.split(' ')[0]}</span>
-    <button class="btn-login" style="margin-left:8px" onclick="showView('orders')">Pesanan</button>
-    <button class="btn-login" style="margin-left:4px;background:transparent;border:1px solid #fff" onclick="doLogout()">Keluar</button>`;
+    el.innerHTML = `
+      <span id="username-display">👤 ${authMember.full_name.split(' ')[0]}</span>
+      <button class="btn-login" style="margin-left:8px;position:relative" id="btn-orders" onclick="showView('orders')">
+        Riwayat<span id="pending-badge" style="display:none;position:absolute;top:-6px;right:-6px;background:#f57c00;color:#fff;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:700;display:none;align-items:center;justify-content:center"></span>
+      </button>
+      <button class="btn-login" style="margin-left:4px;background:transparent;border:1px solid #fff;color:#fff" onclick="doLogout()">Keluar</button>`;
+    fetchPendingCount();
   } else {
     el.innerHTML = `<button class="btn-login" onclick="openLogin()">Login</button>`;
   }
@@ -637,6 +681,7 @@ function goToStep2() {
   if (!selectedAddressID) { showToast('Pilih alamat pengiriman terlebih dahulu'); return; }
   goToStep(2);
   renderOrderSummary();
+  loadVoucherList();
 }
 
 function goToStep3() {
@@ -683,31 +728,113 @@ function renderFinalSummary() {
   document.getElementById('final-summary').innerHTML = document.getElementById('order-summary-display').innerHTML;
 }
 
+// ========================
+// VOUCHER
+// ========================
+let _voucherList = [];
+
+function switchVoucherTab(tab) {
+  document.getElementById('vtab-list').classList.toggle('active', tab === 'list');
+  document.getElementById('vtab-input').classList.toggle('active', tab === 'input');
+  document.getElementById('vpanel-list').style.display = tab === 'list' ? 'block' : 'none';
+  document.getElementById('vpanel-input').style.display = tab === 'input' ? 'block' : 'none';
+}
+
+function voucherTypeLabel(type) {
+  if (type === 'percent') return '<span class="vc-type percent">% Diskon</span>';
+  if (type === 'ongkir')  return '<span class="vc-type ongkir">🚚 Ongkir</span>';
+  return '<span class="vc-type fixed">Rp Diskon</span>';
+}
+
+function voucherDiscLabel(v) {
+  if (v.discount_type === 'percent') return `Hemat ${v.value}%`;
+  return `Hemat Rp ${fmt(v.value)}`;
+}
+
+async function loadVoucherList() {
+  const grid = document.getElementById('voucher-list-grid');
+  grid.innerHTML = '<div class="loader">Memuat voucher...</div>';
+  const res = await api('GET', '/shop/vouchers');
+  _voucherList = Array.isArray(res.data) ? res.data : [];
+  renderVoucherGrid();
+}
+
+function renderVoucherGrid() {
+  const grid = document.getElementById('voucher-list-grid');
+  const sub = calcSubtotal();
+  if (!_voucherList.length) {
+    grid.innerHTML = '<div style="font-size:.82rem;color:#aaa;padding:8px 0">Belum ada voucher tersedia</div>';
+    return;
+  }
+  grid.innerHTML = _voucherList.map(v => {
+    const eligible = sub >= v.min_purchase;
+    const isSelected = appliedVoucher && appliedVoucher.code === v.code;
+    return `<div class="voucher-card ${isSelected ? 'selected' : ''} ${!eligible ? 'disabled' : ''}"
+      onclick="${eligible ? `selectVoucherFromList('${v.code}')` : 'showToast(\"Subtotal belum memenuhi minimum pembelian voucher ini\")'}"
+    >
+      ${voucherTypeLabel(v.discount_type)}
+      <div class="vc-code">${v.code}</div>
+      <div class="vc-name">${v.name}</div>
+      <div class="vc-disc">${voucherDiscLabel(v)}</div>
+      <div class="vc-min">Min. belanja Rp ${fmt(v.min_purchase)}</div>
+      ${!eligible ? '<div style="font-size:.7rem;color:#c62828;margin-top:2px">Belum memenuhi min. belanja</div>' : ''}
+    </div>`;
+  }).join('');
+}
+
+async function selectVoucherFromList(code) {
+  // Validasi ke API dulu dengan subtotal aktual
+  const sub = calcSubtotal();
+  const res = await api('POST', '/shop/voucher/validate', { code, subtotal: sub });
+  if (!res.success) {
+    showToast('❌ ' + (res.message || 'Voucher tidak valid'), true);
+    return;
+  }
+  setAppliedVoucher(code, res.data.discount_amount, res.data.label);
+  renderVoucherGrid(); // refresh highlight
+}
+
 async function applyVoucher() {
   const code = document.getElementById('voucher-input').value.trim().toUpperCase();
-  const el = document.getElementById('voucher-result');
-  if (!code) { el.innerHTML = ''; return; }
+  const errEl = document.getElementById('voucher-err');
+  errEl.style.display = 'none';
+  if (!code) return;
+
+  const btn = document.getElementById('btn-apply-voucher');
+  btn.disabled = true; btn.textContent = '...';
+
   const sub = calcSubtotal();
-  // Coba validate lewat checkout saja, atau tampilkan preview lokal berdasarkan hint
-  // Untuk UX yang lebih baik, kita kirim request validate
-  try {
-    // Simulasi: coba endpoint voucher (kita buat endpoint public untuk validate)
-    // Fallback: tampilkan pesan "akan diterapkan saat checkout"
-    el.innerHTML = `<div class="voucher-badge">
-      🏷️ Kode <b>${code}</b> akan diterapkan saat checkout
-      <span class="rm" onclick="removeVoucher()">×</span>
-    </div>`;
-    appliedVoucher = { code, discount: 0 }; // discount dihitung backend
-    showToast('Kode voucher ' + code + ' akan diterapkan');
-  } catch(e) {
-    el.innerHTML = '<div style="color:#c62828;font-size:.83rem">Kode voucher tidak valid</div>';
+  const res = await api('POST', '/shop/voucher/validate', { code, subtotal: sub });
+
+  btn.disabled = false; btn.textContent = 'Pakai';
+
+  if (!res.success) {
+    errEl.textContent = '❌ ' + (res.message || 'Kode voucher tidak valid');
+    errEl.style.display = 'block';
+    return;
   }
+  setAppliedVoucher(code, res.data.discount_amount, res.data.label);
+}
+
+function setAppliedVoucher(code, discountAmt, label) {
+  appliedVoucher = { code, discount: discountAmt, label };
+  const result = document.getElementById('voucher-result');
+  result.innerHTML = `<div class="voucher-badge">
+    🏷️ <b>${code}</b> — ${label || ('Hemat Rp ' + fmt(discountAmt))}
+    <span class="rm" onclick="removeVoucher()">×</span>
+  </div>`;
+  renderOrderSummary();
+  showToast(`Voucher ${code} berhasil diterapkan!`);
 }
 
 function removeVoucher() {
   appliedVoucher = null;
-  document.getElementById('voucher-input').value = '';
+  const inp = document.getElementById('voucher-input');
+  if (inp) inp.value = '';
   document.getElementById('voucher-result').innerHTML = '';
+  const errEl = document.getElementById('voucher-err');
+  if (errEl) errEl.style.display = 'none';
+  renderVoucherGrid();
   renderOrderSummary();
   showToast('Voucher dihapus');
 }
@@ -809,47 +936,89 @@ function showPaymentResult(data) {
   document.getElementById('payment-result-content').innerHTML = html;
 }
 
-async function checkPayStatus(invoiceNo) {
+async function checkPayStatus(invoiceNo, fromOrders = false) {
+  showToast('Mengecek status pembayaran...');
   const res = await apiAuth('GET', `/shop/orders/${encodeURIComponent(invoiceNo)}/status`);
   if (!res.success) { showToast('Gagal cek status: ' + (res.message || ''), true); return; }
   const st = res.data && res.data.status;
   if (st === 'paid') {
+    fetchUnreadCount();
+    fetchPendingCount();
+    if (fromOrders) {
+      // Dipanggil dari halaman riwayat → reload daftar dan buka detail
+      showToast('✅ Pembayaran dikonfirmasi!');
+      loadOrders();
+      return;
+    }
+    // Dipanggil dari halaman payment result
     document.getElementById('payment-result-content').innerHTML = `
       <div class="payment-result">
         <div class="icon">✅</div>
         <h3>Pembayaran Dikonfirmasi!</h3>
         <p>Pesanan <b>${invoiceNo}</b> telah dibayar.<br>Notifikasi sudah dikirim ke akun Anda!</p>
-        <button class="btn-primary" style="max-width:280px;margin:0 auto" onclick="showView('orders');loadOrders()">Lihat Pesanan →</button>
+        <button class="btn-primary" style="max-width:280px;margin:0 auto" onclick="showView('orders');loadOrders()">Lihat Riwayat →</button>
         <button class="btn-secondary" style="max-width:280px;margin:12px auto" onclick="showView('home')">Kembali Belanja</button>
       </div>`;
-    fetchUnreadCount();
+  } else if (st === 'cancelled') {
+    showToast('❌ Transaksi dibatalkan', true);
+    if (fromOrders) loadOrders();
   } else {
-    showToast(`Status pembayaran: ${st || 'tidak diketahui'} — belum terkonfirmasi`);
+    showToast(`⏳ Status: ${st || 'pending'} — pembayaran belum terkonfirmasi`);
   }
 }
 
 // ========================
 // ORDERS
 // ========================
+async function fetchPendingCount() {
+  if (!authToken) return;
+  const res = await apiAuth('GET', '/shop/orders');
+  const list = Array.isArray(res.data) ? res.data : [];
+  const pending = list.filter(t => t.status === 'pending').length;
+  const badge = document.getElementById('pending-badge');
+  if (!badge) return;
+  if (pending > 0) {
+    badge.textContent = pending;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
 async function loadOrders() {
   if (!authToken) { openLogin(); return; }
   const el = document.getElementById('orders-list');
-  el.innerHTML = '<div class="loader">Memuat pesanan...</div>';
+  el.innerHTML = '<div class="loader">Memuat riwayat...</div>';
   const res = await apiAuth('GET', '/shop/orders');
   const list = Array.isArray(res.data) ? res.data : [];
   if (!res.success || !list.length) {
-    el.innerHTML = '<div class="empty-state"><div class="icon">📦</div>Belum ada pesanan</div>';
+    el.innerHTML = '<div class="empty-state"><div class="icon">📦</div>Belum ada transaksi</div>';
     return;
   }
-  el.innerHTML = list.map(t => `
-    <div class="order-card" onclick="openOrderDetail('${t.invoice_no}')">
-      <div>
+
+  // Pisah pending vs lainnya agar pending muncul di atas
+  const pending = list.filter(t => t.status === 'pending');
+  const others  = list.filter(t => t.status !== 'pending');
+  const sorted  = [...pending, ...others];
+
+  const pendingCount = pending.length;
+  el.innerHTML = (pendingCount > 0
+    ? `<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:.85rem;color:#e65100">
+        ⏳ <b>${pendingCount} transaksi menunggu pembayaran.</b> Klik transaksi untuk cek status atau selesaikan pembayaran.
+       </div>`
+    : '') +
+  sorted.map(t => {
+    const isPending = t.status === 'pending';
+    return `<div class="order-card${isPending ? ' order-card-pending' : ''}" onclick="openOrderDetail('${t.invoice_no}')">
+      <div style="flex:1">
         <div class="oc-inv">${t.invoice_no}</div>
-        <div class="oc-date">${new Date(t.created_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})}</div>
-        <div style="font-size:.9rem;color:#555;margin-top:3px">Rp ${fmt(t.grand_total)}</div>
+        <div class="oc-date">${new Date(t.created_at).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+        <div style="font-size:.9rem;color:#555;margin-top:3px;font-weight:600">Rp ${fmt(t.grand_total)}</div>
+        ${isPending ? `<button class="btn-outline-sm" style="margin-top:6px;font-size:.75rem" onclick="event.stopPropagation();checkPayStatus('${t.invoice_no}',true)">🔄 Cek Status</button>` : ''}
       </div>
       <div class="status-badge status-${t.status}">${statusLabel(t.status)}</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 async function openOrderDetail(invoiceNo) {

@@ -3,8 +3,9 @@ package dto
 import "github.com/yourname/pos-koperasi/internal/model"
 
 type CreateConversationRequest struct {
-	ProductID        int `json:"product_id"`
-	SellerEmployeeID int `json:"seller_employee_id"`
+	ProductID        int    `json:"product_id"`
+	SellerEmployeeID int    `json:"seller_employee_id"`
+	FirstMessage     string `json:"first_message"`
 }
 
 type WSClientMessage struct {

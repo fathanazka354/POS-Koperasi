@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"database/sql"
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
@@ -20,13 +21,27 @@ var _ contract.ChatRepository = (*Repository)(nil)
 
 func (r *Repository) CreateConversation(c model.ChatConversation) (int64, error) {
 	var id int64
+	var pid interface{}
+	if c.ProductID != nil {
+		pid = *c.ProductID
+	} else {
+		pid = nil
+	}
+	var bid interface{}
+	if c.BranchID != nil {
+		bid = *c.BranchID
+	} else {
+		bid = nil
+	}
 	err := r.db.QueryRowx(`
 		INSERT INTO chat_conversations (product_id, member_id, seller_employee_id, branch_id)
 		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (product_id, member_id, seller_employee_id)
-		DO UPDATE SET branch_id = COALESCE(EXCLUDED.branch_id, chat_conversations.branch_id)
+		ON CONFLICT (member_id, seller_employee_id)
+		DO UPDATE SET
+			product_id = COALESCE(EXCLUDED.product_id, chat_conversations.product_id),
+			branch_id = COALESCE(EXCLUDED.branch_id, chat_conversations.branch_id)
 		RETURNING id`,
-		c.ProductID, c.MemberID, c.SellerEmployeeID, c.BranchID,
+		pid, c.MemberID, c.SellerEmployeeID, bid,
 	).Scan(&id)
 	return id, err
 }
@@ -35,9 +50,9 @@ func (r *Repository) GetConversation(id int64) (*model.ChatConversation, error) 
 	var row model.ChatConversation
 	err := r.db.Get(&row, `
 		SELECT c.id, c.product_id, c.member_id, c.seller_employee_id, c.branch_id, c.last_message_at, c.created_at,
-		       p.name AS product_name, m.full_name AS member_name, e.full_name AS seller_name
+		       COALESCE(p.name, '') AS product_name, m.full_name AS member_name, e.full_name AS seller_name
 		FROM chat_conversations c
-		JOIN products p ON p.id = c.product_id
+		LEFT JOIN products p ON p.id = c.product_id
 		JOIN members m ON m.id = c.member_id
 		JOIN employees e ON e.id = c.seller_employee_id
 		WHERE c.id = $1`, id)
@@ -47,13 +62,23 @@ func (r *Repository) GetConversation(id int64) (*model.ChatConversation, error) 
 	return &row, nil
 }
 
+// Hanya pakai m2.body agar query jalan sebelum/ tanpa migrasi 004; stub produk = body kosong.
+const lastMessageSubquery = `(SELECT CASE
+			WHEN TRIM(COALESCE(m2.body, '')) = '' THEN '📎 Produk'
+			ELSE LEFT(TRIM(COALESCE(m2.body, '')), 500)
+		END
+		FROM chat_messages m2
+		WHERE m2.conversation_id = c.id
+		ORDER BY m2.created_at DESC LIMIT 1) AS last_message`
+
 func (r *Repository) ListForMember(memberID int) ([]model.ChatConversation, error) {
 	var rows []model.ChatConversation
 	err := r.db.Select(&rows, `
 		SELECT c.id, c.product_id, c.member_id, c.seller_employee_id, c.branch_id, c.last_message_at, c.created_at,
-		       p.name AS product_name, m.full_name AS member_name, e.full_name AS seller_name
+		       COALESCE(p.name, '') AS product_name, m.full_name AS member_name, e.full_name AS seller_name,
+		       `+lastMessageSubquery+`
 		FROM chat_conversations c
-		JOIN products p ON p.id = c.product_id
+		LEFT JOIN products p ON p.id = c.product_id
 		JOIN members m ON m.id = c.member_id
 		JOIN employees e ON e.id = c.seller_employee_id
 		WHERE c.member_id = $1
@@ -65,9 +90,10 @@ func (r *Repository) ListForEmployee(employeeID int) ([]model.ChatConversation, 
 	var rows []model.ChatConversation
 	err := r.db.Select(&rows, `
 		SELECT c.id, c.product_id, c.member_id, c.seller_employee_id, c.branch_id, c.last_message_at, c.created_at,
-		       p.name AS product_name, m.full_name AS member_name, e.full_name AS seller_name
+		       COALESCE(p.name, '') AS product_name, m.full_name AS member_name, e.full_name AS seller_name,
+		       `+lastMessageSubquery+`
 		FROM chat_conversations c
-		JOIN products p ON p.id = c.product_id
+		LEFT JOIN products p ON p.id = c.product_id
 		JOIN members m ON m.id = c.member_id
 		JOIN employees e ON e.id = c.seller_employee_id
 		WHERE c.seller_employee_id = $1
@@ -75,13 +101,32 @@ func (r *Repository) ListForEmployee(employeeID int) ([]model.ChatConversation, 
 	return rows, err
 }
 
-func (r *Repository) InsertMessage(convID int64, senderRole, body string) (*model.ChatMessage, error) {
+func (r *Repository) ShouldInsertProductContext(convID int64, productID int) (bool, error) {
+	var last sql.NullInt64
+	err := r.db.QueryRow(`
+		SELECT product_id FROM chat_messages
+		WHERE conversation_id = $1
+		ORDER BY created_at DESC
+		LIMIT 1`, convID).Scan(&last)
+	if err == sql.ErrNoRows {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if last.Valid && int(last.Int64) == productID {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (r *Repository) InsertMessage(convID int64, senderRole, body string, productID *int) (*model.ChatMessage, error) {
 	var msg model.ChatMessage
 	err := r.db.QueryRowx(`
-		INSERT INTO chat_messages (conversation_id, sender_role, body)
-		VALUES ($1, $2, $3)
-		RETURNING id, conversation_id, sender_role, body, created_at`,
-		convID, senderRole, body,
+		INSERT INTO chat_messages (conversation_id, sender_role, body, product_id)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, conversation_id, sender_role, body, product_id, created_at`,
+		convID, senderRole, body, productID,
 	).StructScan(&msg)
 	if err != nil {
 		return nil, err
@@ -100,7 +145,7 @@ func (r *Repository) ListMessages(convID int64, limit int) ([]model.ChatMessage,
 	}
 	var rows []model.ChatMessage
 	err := r.db.Select(&rows, `
-		SELECT id, conversation_id, sender_role, body, created_at
+		SELECT id, conversation_id, sender_role, body, product_id, created_at
 		FROM chat_messages
 		WHERE conversation_id = $1
 		ORDER BY created_at ASC
@@ -124,4 +169,3 @@ func (r *Repository) ParticipantRole(convID int64, memberID *int, employeeID *in
 	}
 	return "", fmt.Errorf("bukan peserta percakapan")
 }
-

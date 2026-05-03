@@ -1,0 +1,160 @@
+<!-- ═══════════════════════════ MEMBER APP ═══════════════════════════ -->
+<div id="page-member" class="hidden min-h-screen flex flex-col">
+
+  <!-- Header member -->
+  <header class="bg-brand sticky top-0 z-50 shadow-md">
+    <div class="max-w-5xl mx-auto px-4 py-2.5 flex items-center gap-2">
+      <button onclick="Member.goHome()" class="text-white font-bold text-lg flex-none">🛒 Koperasi</button>
+      <nav class="flex gap-1 flex-1 min-w-0 shrink" id="member-tabs">
+        <button data-tab="shop" onclick="Member.switchTab('shop')"
+          class="member-tab-btn relative px-4 py-1.5 rounded-full text-sm font-semibold transition-all bg-white text-brand shrink-0">
+          🏪 Shop
+          <span id="member-pending-badge" class="hidden absolute -top-1 -right-1 bg-amber-400 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center">0</span>
+        </button>
+        <button data-tab="chat" onclick="Member.switchTab('chat')"
+          class="member-tab-btn relative px-4 py-1.5 rounded-full text-sm font-semibold transition-all text-white/80 hover:text-white hover:bg-white/20 shrink-0">
+          <span class="relative inline-block pr-0.5">💬 Chat
+            <span id="member-chat-unread-badge" class="hidden absolute -top-1.5 -right-2 bg-orange-400 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center">0</span>
+          </span>
+        </button>
+      </nav>
+      <button id="btn-notif" onclick="MemberNotif.openDrawer()"
+        class="relative text-white text-xl p-1 hover:text-white/80 transition-colors">
+        🔔<span id="notif-badge" class="hidden absolute -top-1 -right-1 bg-white text-brand text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">0</span>
+      </button>
+      <button onclick="MemberCart.openDrawer()"
+        class="relative text-white text-xl p-1 hover:text-white/80 transition-colors">
+        🛍️<span id="cart-badge" class="absolute -top-1 -right-1 bg-white text-brand text-[9px] font-bold rounded-full px-1 min-w-[16px] text-center leading-4">0</span>
+      </button>
+      <span class="text-white text-sm font-semibold hidden sm:inline" id="member-username"></span>
+      <button onclick="Member.logout()" class="text-white text-xs font-semibold px-2.5 py-1 rounded border border-white/50 hover:bg-white/10 transition-colors ml-1">Keluar</button>
+    </div>
+  </header>
+
+  <!-- Shop section -->
+  <main id="member-shop" class="flex-1 max-w-5xl mx-auto w-full px-4 py-4">
+    <!-- VIEW: home -->
+    <section id="sv-home" class="member-shop-view">
+      <div class="flex gap-2 mb-4">
+        <input id="search-input" type="text" placeholder="Cari produk…"
+          class="flex-1 px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 bg-white"
+          onkeydown="if(event.key==='Enter') Shop.search()" />
+        <button onclick="Shop.search()" class="bg-brand text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-brand-dark transition-colors">Cari</button>
+      </div>
+      <div id="product-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+    </section>
+    <!-- VIEW: detail -->
+    <section id="sv-detail" class="member-shop-view hidden">
+      <button onclick="Shop.showView('home')" class="text-brand text-sm font-semibold mb-3 flex items-center gap-1 hover:underline">← Kembali</button>
+      <div id="detail-content"></div>
+    </section>
+    <!-- VIEW: checkout -->
+    <section id="sv-checkout" class="member-shop-view hidden">
+      <div class="flex gap-2 mb-5">
+        <div id="co-tab-1" class="flex-1 text-center py-2 rounded-lg text-xs font-bold bg-brand text-white">1. Alamat</div>
+        <div id="co-tab-2" class="flex-1 text-center py-2 rounded-lg text-xs font-bold bg-gray-200 text-gray-500">2. Voucher</div>
+        <div id="co-tab-3" class="flex-1 text-center py-2 rounded-lg text-xs font-bold bg-gray-200 text-gray-500">3. Bayar</div>
+      </div>
+      <!-- Step 1 -->
+      <div id="co-step-1">
+        <div class="bg-white rounded-xl p-4 shadow-sm mb-3">
+          <h4 class="font-bold text-sm mb-3">📍 Pilih Alamat</h4>
+          <div id="addr-list-checkout"></div>
+          <button onclick="UI.openAddrModal()" class="mt-2 text-xs font-semibold text-brand border border-brand px-3 py-1.5 rounded-lg hover:bg-brand-light transition-colors">+ Tambah Alamat</button>
+        </div>
+        <button onclick="Checkout.step2()" class="w-full bg-brand text-white py-3 rounded-xl font-semibold hover:bg-brand-dark transition-colors">Lanjut ke Voucher →</button>
+      </div>
+      <!-- Step 2 -->
+      <div id="co-step-2" class="hidden">
+        <div class="bg-white rounded-xl p-4 shadow-sm mb-3">
+          <h4 class="font-bold text-sm mb-3">🏷️ Voucher <span class="text-gray-400 font-normal text-xs">(opsional)</span></h4>
+          <div class="flex gap-2 mb-3">
+            <button id="vtab-list"  onclick="Vouchers.tab('list')"  class="px-3 py-1 rounded-full text-xs font-semibold bg-brand text-white">Daftar</button>
+            <button id="vtab-input" onclick="Vouchers.tab('input')" class="px-3 py-1 rounded-full text-xs font-semibold border border-gray-300 text-gray-600 hover:border-brand hover:text-brand">Kode Manual</button>
+          </div>
+          <div id="vpanel-list"><div id="voucher-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1"></div></div>
+          <div id="vpanel-input" class="hidden">
+            <div class="flex gap-2">
+              <input id="voucher-code-input" type="text" placeholder="Masukkan kode voucher"
+                class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm uppercase focus:outline-none focus:ring-2 focus:ring-brand/30" />
+              <button onclick="Vouchers.applyManual()" class="text-xs font-semibold text-brand border border-brand px-3 py-2 rounded-lg hover:bg-brand-light">Pakai</button>
+            </div>
+            <p id="voucher-err" class="hidden text-xs text-red-600 mt-1.5"></p>
+          </div>
+          <div id="voucher-applied" class="mt-2"></div>
+        </div>
+        <div class="bg-white rounded-xl p-4 shadow-sm mb-3">
+          <h4 class="font-bold text-sm mb-2">🧾 Ringkasan</h4>
+          <div id="order-summary" class="text-sm space-y-1"></div>
+        </div>
+        <button onclick="Checkout.step3()" class="w-full bg-brand text-white py-3 rounded-xl font-semibold hover:bg-brand-dark transition-colors">Lanjut ke Pembayaran →</button>
+        <button onclick="Checkout.goStep(1)" class="w-full mt-2 border-2 border-brand text-brand py-2.5 rounded-xl font-semibold hover:bg-brand-light">← Kembali</button>
+      </div>
+      <!-- Step 3 -->
+      <div id="co-step-3" class="hidden">
+        <div class="bg-white rounded-xl p-4 shadow-sm mb-3">
+          <h4 class="font-bold text-sm mb-3">💳 Metode Bayar</h4>
+          <div class="grid grid-cols-2 gap-2">
+            <div onclick="Checkout.method('cash')"    data-method="cash"   class="pay-opt border-2 border-brand bg-brand-light rounded-xl p-3 cursor-pointer text-center"><div class="text-2xl">💵</div><p class="text-xs font-semibold mt-1">Tunai</p></div>
+            <div onclick="Checkout.method('qris')"    data-method="qris"   class="pay-opt border-2 border-gray-200 rounded-xl p-3 cursor-pointer text-center hover:border-brand/50 transition-colors"><div class="text-2xl">📱</div><p class="text-xs font-semibold mt-1">QRIS</p></div>
+            <div onclick="Checkout.method('va')"      data-method="va"     class="pay-opt border-2 border-gray-200 rounded-xl p-3 cursor-pointer text-center hover:border-brand/50 transition-colors"><div class="text-2xl">🏦</div><p class="text-xs font-semibold mt-1">Transfer VA</p></div>
+            <div onclick="Checkout.method('ewallet')" data-method="ewallet" class="pay-opt border-2 border-gray-200 rounded-xl p-3 cursor-pointer text-center hover:border-brand/50 transition-colors"><div class="text-2xl">💰</div><p class="text-xs font-semibold mt-1">E-Wallet</p></div>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl p-4 shadow-sm mb-3">
+          <div id="final-summary" class="text-sm space-y-1"></div>
+        </div>
+        <button id="btn-pay" onclick="Checkout.submit()" class="w-full bg-brand text-white py-3 rounded-xl font-semibold hover:bg-brand-dark transition-colors">🔒 Bayar Sekarang</button>
+        <button onclick="Checkout.goStep(2)" class="w-full mt-2 border-2 border-brand text-brand py-2.5 rounded-xl font-semibold hover:bg-brand-light">← Kembali</button>
+      </div>
+    </section>
+    <!-- VIEW: payment result -->
+    <section id="sv-payment" class="member-shop-view hidden">
+      <div id="payment-result" class="flex flex-col items-center text-center py-12 px-4"></div>
+    </section>
+    <!-- VIEW: orders -->
+    <section id="sv-orders" class="member-shop-view hidden">
+      <div class="flex items-center justify-between mb-3">
+        <button onclick="Shop.showView('home')" class="text-brand text-sm font-semibold flex items-center gap-1 hover:underline">← Beranda</button>
+        <h3 class="font-bold text-base">📦 Riwayat Transaksi</h3>
+        <button onclick="Orders.load()" class="text-xs text-brand border border-brand px-2 py-1 rounded-lg hover:bg-brand-light">🔄 Refresh</button>
+      </div>
+      <div id="orders-list"></div>
+    </section>
+    <!-- VIEW: order detail -->
+    <section id="sv-order-detail" class="member-shop-view hidden">
+      <button onclick="Shop.showView('orders')" class="text-brand text-sm font-semibold mb-3 flex items-center gap-1 hover:underline">← Riwayat</button>
+      <div id="order-detail-content"></div>
+    </section>
+  </main>
+
+  <!-- Chat section (full height) -->
+  <div id="member-chat" class="hidden fixed inset-0 top-[52px] bg-white flex z-20">
+    <!-- Sidebar -->
+    <aside class="w-72 border-r border-gray-100 flex flex-col flex-none bg-white">
+      <div class="px-4 pt-3 pb-2 border-b border-gray-100">
+        <h3 class="font-bold text-sm mb-2">Percakapan</h3>
+        <input type="text" id="mc-search" placeholder="Cari…"
+          class="w-full px-3 py-1.5 bg-gray-100 rounded-full text-xs focus:outline-none border-0" />
+      </div>
+      <div id="mc-conv-list" class="flex-1 overflow-y-auto"></div>
+    </aside>
+    <!-- Main area -->
+    <div class="flex-1 flex flex-col min-w-0">
+      <div id="mc-empty" class="flex-1 flex flex-col items-center justify-center text-gray-300">
+        <div class="text-5xl mb-3">🗨️</div>
+        <p class="text-sm font-medium text-gray-400">Pilih percakapan atau buka Shop → Chat dengan penjual</p>
+      </div>
+      <div id="mc-active" class="hidden flex-1 flex flex-col min-h-0">
+        <div id="mc-header" class="px-4 py-3 bg-white border-b border-gray-100 flex items-center gap-3 shadow-sm flex-none"></div>
+        <div id="mc-messages" class="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-2 bg-gray-50"></div>
+        <div class="px-4 py-3 bg-white border-t border-gray-100 flex gap-2 items-center flex-none">
+          <input id="mc-input" type="text" placeholder="Tulis pesan…"
+            class="flex-1 px-4 py-2.5 bg-gray-100 rounded-full text-sm focus:outline-none border-0" />
+          <button id="btn-mc-send" class="w-10 h-10 rounded-full bg-brand text-white flex items-center justify-center hover:bg-brand-dark transition-colors text-base flex-none shadow">➤</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end page-member -->

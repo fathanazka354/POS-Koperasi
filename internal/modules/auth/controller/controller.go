@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/yourname/pos-koperasi/internal/modules/auth/contract"
 	"github.com/yourname/pos-koperasi/internal/modules/auth/controller/dto"
@@ -57,5 +58,47 @@ func (c *Controller) MemberLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Success(w, "Login member berhasil", out)
+}
+
+func bearerToken(r *http.Request) string {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return ""
+	}
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		return ""
+	}
+	return parts[1]
+}
+
+// POST /api/v1/auth/member-refresh — Authorization: Bearer <access token, boleh sudah exp>
+func (c *Controller) MemberRefresh(w http.ResponseWriter, r *http.Request) {
+	tok := bearerToken(r)
+	if tok == "" {
+		response.Unauthorized(w, "Authorization header required")
+		return
+	}
+	out, err := c.svc.RefreshMember(tok)
+	if err != nil {
+		response.Unauthorized(w, err.Error())
+		return
+	}
+	response.Success(w, "Token diperbarui", out)
+}
+
+// POST /api/v1/auth/employee-refresh — Authorization: Bearer <access token, boleh sudah exp>
+func (c *Controller) EmployeeRefresh(w http.ResponseWriter, r *http.Request) {
+	tok := bearerToken(r)
+	if tok == "" {
+		response.Unauthorized(w, "Authorization header required")
+		return
+	}
+	out, err := c.svc.RefreshEmployee(tok)
+	if err != nil {
+		response.Unauthorized(w, err.Error())
+		return
+	}
+	response.Success(w, "Token diperbarui", out)
 }
 

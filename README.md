@@ -1,7 +1,7 @@
 # POS Koperasi Minimarket — Golang + Midtrans + MongoDB
 
-Demo Shop: `http://localhost:8080/demo/shop`
-Demo Chat: `http://localhost:8080/demo/chat`
+Demo (Shop + Chat): `http://localhost:8080/demo/`
+Alihkan: `/demo/shop` dan `/demo/chat` → `/demo/`
 
 Dokumentasi API lengkap (request body, response, error): [`docs/API.md`](docs/API.md).
 

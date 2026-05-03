@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/yourname/pos-koperasi/internal/modules/voucher/contract"
+	"github.com/yourname/pos-koperasi/internal/modules/voucher/domain"
 )
 
 type Service struct {
@@ -36,15 +37,28 @@ func (s *Service) Validate(code string, subtotal float64) (*contract.ValidateRes
 	}
 
 	var discount float64
+	var label string
 	switch v.DiscountType {
 	case "percent":
 		discount = math.Round(subtotal * v.Value / 100)
 		if v.MaxDiscount != nil && discount > *v.MaxDiscount {
 			discount = *v.MaxDiscount
 		}
+		label = fmt.Sprintf("Diskon %.0f%%", v.Value)
+		if v.MaxDiscount != nil {
+			label += fmt.Sprintf(" (maks Rp %.0f)", *v.MaxDiscount)
+		}
 	case "fixed":
 		discount = v.Value
+		label = fmt.Sprintf("Diskon Rp %.0f", v.Value)
+	case "ongkir":
+		discount = v.Value
+		label = fmt.Sprintf("Gratis Ongkir Rp %.0f", v.Value)
 	}
 
-	return &contract.ValidateResult{Voucher: v, DiscountAmt: discount}, nil
+	return &contract.ValidateResult{Voucher: v, DiscountAmt: discount, Label: label}, nil
+}
+
+func (s *Service) ListActive() ([]*domain.Voucher, error) {
+	return s.repo.ListActive()
 }

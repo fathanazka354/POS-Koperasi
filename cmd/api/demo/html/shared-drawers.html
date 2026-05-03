@@ -1,0 +1,98 @@
+<!-- ═══════════════════════ SHARED: Drawers & Modals ═══════════════════════ -->
+<div id="overlay" class="hidden fixed inset-0 bg-black/30 z-30" onclick="UI.closeOverlay()"></div>
+
+<!-- Notif Drawer -->
+<div id="notif-drawer" class="drawer fixed top-0 right-[-380px] w-[380px] h-full bg-white shadow-2xl z-40 flex flex-col">
+  <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+    <h3 class="font-bold text-sm">Notifikasi</h3>
+    <div class="flex gap-2">
+      <button onclick="MemberNotif.markAllRead()" class="text-xs text-brand border border-brand px-2 py-1 rounded-lg hover:bg-brand-light">Tandai Dibaca</button>
+      <button onclick="UI.closeOverlay()" class="text-gray-400 text-xl leading-none">×</button>
+    </div>
+  </div>
+  <div id="notif-list" class="flex-1 overflow-y-auto"></div>
+</div>
+
+<!-- Cart Drawer -->
+<div id="cart-drawer" class="drawer fixed top-0 right-[-400px] w-[400px] h-full bg-white shadow-2xl z-40 flex flex-col">
+  <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+    <h3 class="font-bold text-sm">🛍️ Keranjang</h3>
+    <button onclick="UI.closeOverlay()" class="text-gray-400 text-xl leading-none">×</button>
+  </div>
+  <div id="cart-list" class="flex-1 overflow-y-auto p-3"></div>
+  <div class="p-4 border-t border-gray-100">
+    <div class="flex justify-between font-bold text-sm mb-3">
+      <span>Total</span><span id="cart-total" class="text-brand">Rp 0</span>
+    </div>
+    <button onclick="Checkout.start()" class="w-full bg-brand text-white py-2.5 rounded-xl font-semibold hover:bg-brand-dark transition-colors">Checkout →</button>
+  </div>
+</div>
+
+<!-- Address Modal -->
+<div id="addr-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+    <h3 class="font-bold text-base mb-4">📍 Tambah Alamat</h3>
+    <div class="space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs text-gray-500 mb-1">Label</label><input id="al" value="Rumah" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+        <div><label class="block text-xs text-gray-500 mb-1">Nama Penerima</label><input id="ar" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+      </div>
+      <div><label class="block text-xs text-gray-500 mb-1">Telepon</label><input id="ap" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+      <div><label class="block text-xs text-gray-500 mb-1">Alamat Lengkap</label><input id="aa" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs text-gray-500 mb-1">Kota</label><input id="ac" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+        <div><label class="block text-xs text-gray-500 mb-1">Provinsi</label><input id="apv" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+      </div>
+      <div><label class="block text-xs text-gray-500 mb-1">Kode Pos</label><input id="az" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+      <p id="addr-err" class="hidden text-xs text-red-600"></p>
+      <button onclick="Address.save()" class="w-full bg-brand text-white py-2.5 rounded-xl font-semibold hover:bg-brand-dark">Simpan</button>
+      <button onclick="UI.closeAddrModal()" class="w-full border-2 border-brand text-brand py-2 rounded-xl font-semibold hover:bg-brand-light">Batal</button>
+    </div>
+  </div>
+</div>
+
+<!-- Login Modal: Member -->
+<div id="modal-login-member" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl fade-in">
+    <button onclick="Landing.closeAll()" class="float-right text-gray-300 hover:text-gray-600 text-xl leading-none mb-1">×</button>
+    <div class="text-3xl mb-2">🛍️</div>
+    <h3 class="font-bold text-base mb-1">Login Pembeli</h3>
+    <p class="text-xs text-gray-400 mb-4">Masukkan kode anggota dan nomor telepon</p>
+    <div class="space-y-3">
+      <div><label class="block text-xs text-gray-500 font-medium mb-1">Kode Anggota</label>
+        <input id="ml-code" type="text" placeholder="MBR001"
+          class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+      <div><label class="block text-xs text-gray-500 font-medium mb-1">Nomor Telepon</label>
+        <input id="ml-phone" type="text" placeholder="081234567890"
+          class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" /></div>
+      <p id="ml-err" class="hidden text-xs text-red-600"></p>
+      <button id="btn-ml-submit" onclick="MemberAuth.login()"
+        class="w-full bg-brand text-white py-2.5 rounded-xl font-semibold hover:bg-brand-dark transition-colors">Masuk sebagai Pembeli</button>
+      <button onclick="Landing.closeAll()"
+        class="w-full border-2 border-gray-200 text-gray-600 py-2 rounded-xl font-semibold hover:bg-gray-50 transition-colors">Kembali</button>
+    </div>
+  </div>
+</div>
+
+<!-- Login Modal: Seller -->
+<div id="modal-login-seller" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl fade-in">
+    <button onclick="Landing.closeAll()" class="float-right text-gray-300 hover:text-gray-600 text-xl leading-none mb-1">×</button>
+    <div class="text-3xl mb-2">🏪</div>
+    <h3 class="font-bold text-base mb-1">Login Penjual</h3>
+    <p class="text-xs text-gray-400 mb-4">Login sebagai karyawan untuk menerima dan membalas chat</p>
+    <div class="space-y-3">
+      <div><label class="block text-xs text-gray-500 font-medium mb-1">NIK Karyawan</label>
+        <input id="sl-nik" type="text" placeholder="EMP001"
+          class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-seller/30" /></div>
+      <div><label class="block text-xs text-gray-500 font-medium mb-1">PIN</label>
+        <input id="sl-pin" type="password" placeholder="1234"
+          class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-seller/30" /></div>
+      <p id="sl-err" class="hidden text-xs text-red-600"></p>
+      <button id="btn-sl-submit" onclick="SellerAuth.login()"
+        class="w-full bg-seller text-white py-2.5 rounded-xl font-semibold hover:bg-seller-dark transition-colors">Masuk sebagai Penjual</button>
+      <button onclick="Landing.closeAll()"
+        class="w-full border-2 border-gray-200 text-gray-600 py-2 rounded-xl font-semibold hover:bg-gray-50 transition-colors">Kembali</button>
+    </div>
+  </div>
+</div>

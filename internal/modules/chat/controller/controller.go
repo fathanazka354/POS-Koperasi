@@ -50,6 +50,7 @@ func (c *Controller) CreateConversation(w http.ResponseWriter, r *http.Request) 
 	conv, err := c.svc.CreateConversation(claims.MemberID, contract.CreateConversationInput{
 		ProductID:        req.ProductID,
 		SellerEmployeeID: req.SellerEmployeeID,
+		FirstMessage:     req.FirstMessage,
 	})
 	if err != nil {
 		response.BadRequest(w, err.Error())
@@ -100,6 +101,30 @@ func (c *Controller) ListMessages(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, "OK", msgs)
 }
 
+// GET /api/v1/chat/conversations/{id}/presence
+func (c *Controller) ConversationPresence(w http.ResponseWriter, r *http.Request) {
+	p, err := c.chatPrincipalFromRequest(r)
+	if err != nil {
+		response.Unauthorized(w, err.Error())
+		return
+	}
+	idStr := chi.URLParam(r, "id")
+	convID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || convID <= 0 {
+		response.BadRequest(w, "id tidak valid")
+		return
+	}
+	pr, err := c.svc.ConversationPresence(convID, p)
+	if err != nil {
+		response.BadRequest(w, err.Error())
+		return
+	}
+	response.Success(w, "OK", map[string]bool{
+		"buyer_online":  pr.BuyerOnline,
+		"seller_online": pr.SellerOnline,
+	})
+}
+
 func (c *Controller) chatPrincipalFromRequest(r *http.Request) (*middleware.ChatPrincipal, error) {
 	auth := r.Header.Get("Authorization")
 	if auth == "" {
@@ -134,6 +159,10 @@ func (c *Controller) ServeWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	client := utility.NewClient(c.svc.Hub(), conn, 256)
+	c.svc.PresenceConnect(principal)
+	defer func() {
+		c.svc.PresenceDisconnect(principal)
+	}()
 	defer close(client.Send)
 	go c.wsWritePump(client)
 	c.wsReadPump(client, principal)
@@ -201,8 +230,15 @@ func (c *Controller) wsReadPump(cl *utility.Client, p *middleware.ChatPrincipal)
 			}
 			c.svc.Hub().BroadcastRoom(msg.ConversationID, payload)
 
+		case "ping":
+			ok, _ := json.Marshal(dto.WSServerMessage{Type: "pong"})
+			select {
+			case cl.Send <- ok:
+			default:
+			}
+
 		default:
-			c.wsSendError(cl, "type tidak dikenal (gunakan join atau message)")
+			c.wsSendError(cl, "type tidak dikenal (gunakan join, message, atau ping)")
 		}
 	}
 }

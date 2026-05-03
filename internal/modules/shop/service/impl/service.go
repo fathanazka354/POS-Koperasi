@@ -11,6 +11,7 @@ import (
 	txcontract "github.com/yourname/pos-koperasi/internal/modules/transaction/contract"
 	txdomain "github.com/yourname/pos-koperasi/internal/modules/transaction/domain"
 	vouchercontract "github.com/yourname/pos-koperasi/internal/modules/voucher/contract"
+	voucherdomain "github.com/yourname/pos-koperasi/internal/modules/voucher/domain"
 )
 
 // NotifyFn ditetapkan dari inject.go setelah semua modul siap.
@@ -217,6 +218,22 @@ func (s *Service) Checkout(input shopcontract.CheckoutInput) (*shopcontract.Chec
 	}
 
 	return resp, nil
+}
+
+func (s *Service) ValidateVoucher(code string, subtotal float64) (*shopcontract.VoucherValidateResult, error) {
+	res, err := s.voucherSvc.Validate(code, subtotal)
+	if err != nil {
+		return nil, err
+	}
+	return &shopcontract.VoucherValidateResult{
+		Voucher:     res.Voucher,
+		DiscountAmt: res.DiscountAmt,
+		Label:       res.Label,
+	}, nil
+}
+
+func (s *Service) ListVouchers() ([]*voucherdomain.Voucher, error) {
+	return s.voucherSvc.ListActive()
 }
 
 func (s *Service) GetTransactionsByMember(memberID int) ([]txdomain.Transaction, error) {

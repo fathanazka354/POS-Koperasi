@@ -3,6 +3,7 @@ package impl
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/yourname/pos-koperasi/internal/middleware"
@@ -17,10 +18,11 @@ type Service struct {
 	db   *sqlx.DB
 	repo contract.ChatRepository
 	hub  *utility.Hub
+	pres *utility.Presence
 }
 
-func New(db *sqlx.DB, repo contract.ChatRepository, hub *utility.Hub) *Service {
-	return &Service{db: db, repo: repo, hub: hub}
+func New(db *sqlx.DB, repo contract.ChatRepository, hub *utility.Hub, pres *utility.Presence) *Service {
+	return &Service{db: db, repo: repo, hub: hub, pres: pres}
 }
 
 var _ contract.ChatService = (*Service)(nil)
@@ -28,6 +30,10 @@ var _ contract.ChatService = (*Service)(nil)
 func (s *Service) CreateConversation(memberID int, input contract.CreateConversationInput) (*model.ChatConversation, error) {
 	if input.ProductID <= 0 || input.SellerEmployeeID <= 0 {
 		return nil, fmt.Errorf("product_id dan seller_employee_id wajib")
+	}
+	first := strings.TrimSpace(input.FirstMessage)
+	if first == "" {
+		return nil, fmt.Errorf("first_message wajib — percakapan disimpan setelah Anda mengirim pesan pertama")
 	}
 
 	var emp authdomain.Employee
@@ -42,8 +48,9 @@ func (s *Service) CreateConversation(memberID int, input contract.CreateConversa
 	_ = p
 
 	bid := emp.BranchID
+	pid := input.ProductID
 	conv := model.ChatConversation{
-		ProductID:        input.ProductID,
+		ProductID:        &pid,
 		MemberID:         memberID,
 		SellerEmployeeID: input.SellerEmployeeID,
 		BranchID:         &bid,
@@ -53,6 +60,33 @@ func (s *Service) CreateConversation(memberID int, input contract.CreateConversa
 	if err != nil {
 		return nil, fmt.Errorf("gagal membuat percakapan: %w", err)
 	}
+
+	// Lampiran produk + pesan pertama dalam satu alur (baru tersimpan di DB sekarang).
+	ins, err := s.repo.ShouldInsertProductContext(id, input.ProductID)
+	if err == nil && ins {
+		pcopy := input.ProductID
+		saved, err := s.repo.InsertMessage(id, "buyer", "", &pcopy)
+		if err != nil {
+			return nil, err
+		}
+		out, _ := json.Marshal(map[string]any{
+			"type":              "message",
+			"conversation_id": id,
+			"message":           saved,
+		})
+		s.hub.BroadcastRoom(id, out)
+	}
+
+	savedText, err := s.repo.InsertMessage(id, "buyer", first, nil)
+	if err != nil {
+		return nil, err
+	}
+	outText, _ := json.Marshal(map[string]any{
+		"type":              "message",
+		"conversation_id": id,
+		"message":           savedText,
+	})
+	s.hub.BroadcastRoom(id, outText)
 
 	out, err := s.repo.GetConversation(id)
 	if err != nil {
@@ -121,7 +155,7 @@ func (s *Service) PostMessage(convID int64, body string, p *middleware.ChatPrinc
 		return nil, err
 	}
 
-	saved, err := s.repo.InsertMessage(convID, role, body)
+	saved, err := s.repo.InsertMessage(convID, role, body, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -136,5 +170,43 @@ func (s *Service) PostMessage(convID int64, body string, p *middleware.ChatPrinc
 
 func (s *Service) Hub() *utility.Hub {
 	return s.hub
+}
+
+func (s *Service) PresenceConnect(p *middleware.ChatPrincipal) {
+	if s.pres == nil || p == nil {
+		return
+	}
+	if p.IsEmployee {
+		s.pres.ConnectEmployee(p.EmployeeID)
+		return
+	}
+	s.pres.ConnectMember(p.MemberID)
+}
+
+func (s *Service) PresenceDisconnect(p *middleware.ChatPrincipal) {
+	if s.pres == nil || p == nil {
+		return
+	}
+	if p.IsEmployee {
+		s.pres.DisconnectEmployee(p.EmployeeID)
+		return
+	}
+	s.pres.DisconnectMember(p.MemberID)
+}
+
+func (s *Service) ConversationPresence(convID int64, p *middleware.ChatPrincipal) (contract.ConversationPresence, error) {
+	var out contract.ConversationPresence
+	if err := s.assertParticipant(convID, p); err != nil {
+		return out, err
+	}
+	c, err := s.repo.GetConversation(convID)
+	if err != nil {
+		return out, err
+	}
+	if s.pres != nil {
+		out.BuyerOnline = s.pres.IsMemberOnline(c.MemberID)
+		out.SellerOnline = s.pres.IsEmployeeOnline(c.SellerEmployeeID)
+	}
+	return out, nil
 }
 

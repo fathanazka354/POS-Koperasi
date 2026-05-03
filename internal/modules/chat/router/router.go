@@ -20,6 +20,7 @@ func (rt *Router) Register(r chi.Router, jwtSecret string) {
 
 	// Chat — daftar & riwayat (Bearer karyawan atau member; validasi di controller)
 	r.Get("/chat/conversations", rt.chat.ListConversations)
+	r.Get("/chat/conversations/{id}/presence", rt.chat.ConversationPresence)
 	r.Get("/chat/conversations/{id}/messages", rt.chat.ListMessages)
 
 	// Buat percakapan — hanya member (JWT member)

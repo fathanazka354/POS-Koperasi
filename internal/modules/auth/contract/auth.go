@@ -25,5 +25,8 @@ type MemberLoginOutput struct {
 type AuthService interface {
 	Login(input LoginInput) (*LoginOutput, error)
 	MemberLogin(input MemberLoginInput) (*MemberLoginOutput, error)
+	// Refresh memvalidasi tanda tangan JWT (exp boleh lewat dalam jendela singkat) dan mengeluarkan access token baru.
+	RefreshMember(accessToken string) (*MemberLoginOutput, error)
+	RefreshEmployee(accessToken string) (*LoginOutput, error)
 }
 

@@ -1,0 +1,74 @@
+<!-- ═══════════════════════════ SELLER APP ═══════════════════════════ -->
+<div id="page-seller" class="hidden h-screen flex flex-col">
+
+  <!-- Seller header -->
+  <header class="bg-seller shadow-md flex-none z-10">
+    <div class="px-4 py-2.5 flex items-center gap-2 flex-nowrap min-w-0">
+      <span class="text-white font-bold text-base shrink-0">🏪 Koperasi</span>
+      <span class="bg-white/20 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">SELLER</span>
+      <nav class="flex gap-1 ml-2 shrink-0">
+        <button type="button" id="sn-chat" onclick="Seller.switchView('chat')"
+          class="seller-nav px-3 py-1 rounded-full text-xs font-semibold bg-white text-seller shadow-sm transition-all inline-flex items-center justify-center">
+          <span class="relative inline-block pr-0.5 leading-tight">💬 Chat
+            <span id="seller-chat-badge" class="hidden absolute -top-1.5 -right-2 bg-amber-400 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-0.5 flex items-center justify-center leading-none">0</span>
+          </span>
+        </button>
+        <button type="button" id="sn-prod" onclick="Seller.switchView('products')"
+          class="seller-nav px-3 py-1 rounded-full text-xs font-semibold text-white/90 hover:bg-white/15 transition-all">📦 Produk</button>
+      </nav>
+      <div class="flex-1 min-w-[2rem]"></div>
+      <span class="text-white/80 text-xs truncate max-w-[120px] sm:max-w-none" id="seller-username"></span>
+      <span id="seller-ws-status" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/20 text-white/70 hidden sm:inline-flex">Connecting…</span>
+      <button onclick="Seller.logout()" class="text-white text-xs font-semibold px-2.5 py-1 rounded border border-white/40 hover:bg-white/10 transition-colors">Keluar</button>
+    </div>
+  </header>
+
+  <!-- VIEW: Chat -->
+  <div id="seller-view-chat" class="flex-1 flex overflow-hidden min-h-0">
+
+    <!-- Sidebar percakapan -->
+    <aside class="w-80 border-r border-gray-100 flex flex-col flex-none bg-white">
+      <div class="px-4 pt-3 pb-2.5 border-b border-gray-100">
+        <h3 class="font-bold text-sm mb-2">Chat Pembeli</h3>
+        <input type="text" id="sc-search" placeholder="Cari percakapan…"
+          class="w-full px-3 py-2 bg-gray-100 rounded-full text-xs focus:outline-none border-0" />
+      </div>
+      <div id="sc-conv-list" class="flex-1 overflow-y-auto"></div>
+    </aside>
+
+    <!-- Area chat aktif -->
+    <div class="flex-1 flex flex-col min-w-0 bg-gray-50">
+      <!-- Empty -->
+      <div id="sc-empty" class="flex-1 flex flex-col items-center justify-center gap-3 text-gray-300">
+        <div class="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-4xl">🗨️</div>
+        <p class="text-sm font-medium text-gray-400">Pilih percakapan untuk mulai membalas</p>
+        <p class="text-xs text-gray-300">Pesan baru masuk akan muncul otomatis</p>
+      </div>
+      <!-- Active -->
+      <div id="sc-active" class="hidden flex-1 flex flex-col min-h-0">
+        <div id="sc-header" class="px-4 py-3 bg-white border-b border-gray-100 flex items-center gap-3 shadow-sm flex-none"></div>
+        <div id="sc-messages" class="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-2"></div>
+        <div class="px-4 py-3 bg-white border-t border-gray-100 flex gap-2 items-center flex-none">
+          <input id="sc-input" type="text" placeholder="Balas pembeli…"
+            class="flex-1 px-4 py-2.5 bg-gray-100 rounded-full text-sm focus:outline-none border-0" />
+          <button id="btn-sc-send" class="w-10 h-10 rounded-full bg-seller text-white flex items-center justify-center hover:bg-seller-dark transition-colors text-base flex-none shadow">➤</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end seller-view-chat -->
+
+  <!-- VIEW: Produk (CRUD) -->
+  <div id="seller-view-products" class="hidden flex-1 flex flex-col overflow-hidden min-h-0 bg-gray-50">
+    <div class="px-4 py-3 flex flex-wrap gap-2 items-center bg-white border-b border-gray-100 flex-none">
+      <input type="text" id="sp-search" placeholder="Cari nama / barcode…"
+        class="flex-1 min-w-[140px] px-3 py-2 bg-gray-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-seller/30 border-0" />
+      <button type="button" onclick="SellerProducts.load()" class="text-seller border border-seller px-3 py-2 rounded-lg text-xs font-semibold hover:bg-seller-light transition-colors">🔄 Refresh</button>
+      <button type="button" onclick="SellerProducts.openModal()" class="bg-seller text-white px-4 py-2 rounded-lg text-xs font-semibold hover:bg-seller-dark transition-colors shadow-sm">+ Tambah Produk</button>
+    </div>
+    <div class="flex-1 overflow-auto p-4">
+      <div id="sp-list" class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden"></div>
+    </div>
+  </div>
+
+</div><!-- end page-seller -->

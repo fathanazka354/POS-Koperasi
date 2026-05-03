@@ -13,6 +13,10 @@ type Router struct {
 func New(ctl *controller.Controller) *Router { return &Router{ctl: ctl} }
 
 func (rt *Router) Register(r chi.Router, jwtSecret string) {
+	// Public routes (tanpa auth)
+	r.Get("/shop/vouchers", rt.ctl.ListVouchers)
+	r.Post("/shop/voucher/validate", rt.ctl.ValidateVoucher)
+
 	// Protected member routes
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.MemberJWTAuth(jwtSecret))
