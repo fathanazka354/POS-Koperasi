@@ -2,91 +2,82 @@ package main
 
 import (
 	"context"
-	"embed"
 	"fmt"
-	"io/fs"
 	"log"
 	"net/http"
+	"time"
 
-	"github.com/go-chi/chi/v5"
-	chimiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
-	"github.com/jmoiron/sqlx"
+	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/fx"
+	"gorm.io/gorm"
 
-	"github.com/yourname/pos-koperasi/internal/config"
-	"github.com/yourname/pos-koperasi/internal/middleware"
-	midtransClient "github.com/yourname/pos-koperasi/internal/midtrans"
+	"github.com/fathanazka354/pos-koperasi/internal/config"
+	authhandler "github.com/fathanazka354/pos-koperasi/internal/delivery/http/handler/auth"
+	chathandler "github.com/fathanazka354/pos-koperasi/internal/delivery/http/handler/chat"
+	notifhandler "github.com/fathanazka354/pos-koperasi/internal/delivery/http/handler/notification"
+	producthandler "github.com/fathanazka354/pos-koperasi/internal/delivery/http/handler/product"
+	authroute "github.com/fathanazka354/pos-koperasi/internal/delivery/http/route/auth"
+	addrhandler "github.com/fathanazka354/pos-koperasi/internal/delivery/http/handler/address"
+	addrroute "github.com/fathanazka354/pos-koperasi/internal/delivery/http/route/address"
+	chatroute "github.com/fathanazka354/pos-koperasi/internal/delivery/http/route/chat"
+	notifroute "github.com/fathanazka354/pos-koperasi/internal/delivery/http/route/notification"
+	productroute "github.com/fathanazka354/pos-koperasi/internal/delivery/http/route/product"
+	shophandler "github.com/fathanazka354/pos-koperasi/internal/delivery/http/handler/shop"
+	shoproute "github.com/fathanazka354/pos-koperasi/internal/delivery/http/route/shop"
+	txhandler "github.com/fathanazka354/pos-koperasi/internal/delivery/http/handler/transaction"
+	txroute "github.com/fathanazka354/pos-koperasi/internal/delivery/http/route/transaction"
+	"github.com/fathanazka354/pos-koperasi/internal/gateway/outbox"
+	"github.com/fathanazka354/pos-koperasi/internal/gateway/queue"
+	infraDB "github.com/fathanazka354/pos-koperasi/internal/infra/db"
+	midtransClient "github.com/fathanazka354/pos-koperasi/internal/midtrans"
 
 	// Auth
-	authcontract "github.com/yourname/pos-koperasi/internal/modules/auth/contract"
-	authcontroller "github.com/yourname/pos-koperasi/internal/modules/auth/controller"
-	authrouter "github.com/yourname/pos-koperasi/internal/modules/auth/router"
-	authsvc "github.com/yourname/pos-koperasi/internal/modules/auth/service/impl"
+	authuc "github.com/fathanazka354/pos-koperasi/internal/usecase/auth"
+	authrepo "github.com/fathanazka354/pos-koperasi/internal/repository/auth"
 
 	// Chat
-	chatcontract "github.com/yourname/pos-koperasi/internal/modules/chat/contract"
-	chatcontroller "github.com/yourname/pos-koperasi/internal/modules/chat/controller"
-	chatrepo "github.com/yourname/pos-koperasi/internal/modules/chat/repository/impl"
-	chatrouter "github.com/yourname/pos-koperasi/internal/modules/chat/router"
-	chatsvc "github.com/yourname/pos-koperasi/internal/modules/chat/service/impl"
-	chatutil "github.com/yourname/pos-koperasi/internal/modules/chat/utility"
+	chatuc "github.com/fathanazka354/pos-koperasi/internal/usecase/chat"
+	chatutil "github.com/fathanazka354/pos-koperasi/internal/gateway/chatws/utility"
+	chatrepo "github.com/fathanazka354/pos-koperasi/internal/repository/chat"
 
 	// Product
-	productcontract "github.com/yourname/pos-koperasi/internal/modules/product/contract"
-	productcontroller "github.com/yourname/pos-koperasi/internal/modules/product/controller"
-	productrepo "github.com/yourname/pos-koperasi/internal/modules/product/repository/impl"
-	productrouter "github.com/yourname/pos-koperasi/internal/modules/product/router"
-	productsvc "github.com/yourname/pos-koperasi/internal/modules/product/service/impl"
+	productuc "github.com/fathanazka354/pos-koperasi/internal/usecase/product"
+	productrepo "github.com/fathanazka354/pos-koperasi/internal/repository/product"
 
 	// Transaction
-	txcontract "github.com/yourname/pos-koperasi/internal/modules/transaction/contract"
-	txcontroller "github.com/yourname/pos-koperasi/internal/modules/transaction/controller"
-	txrepo "github.com/yourname/pos-koperasi/internal/modules/transaction/repository/impl"
-	txrouter "github.com/yourname/pos-koperasi/internal/modules/transaction/router"
-	txsvc "github.com/yourname/pos-koperasi/internal/modules/transaction/service/impl"
+	txuc "github.com/fathanazka354/pos-koperasi/internal/usecase/transaction"
+	txrepo "github.com/fathanazka354/pos-koperasi/internal/repository/transaction"
 
 	// Notification
-	notifcontract "github.com/yourname/pos-koperasi/internal/modules/notification/contract"
-	notifcontroller "github.com/yourname/pos-koperasi/internal/modules/notification/controller"
-	notifrepo "github.com/yourname/pos-koperasi/internal/modules/notification/repository/impl"
-	notifmem "github.com/yourname/pos-koperasi/internal/modules/notification/repository/memory"
-	notifrouter "github.com/yourname/pos-koperasi/internal/modules/notification/router"
-	notifsvc "github.com/yourname/pos-koperasi/internal/modules/notification/service/impl"
-	notifws "github.com/yourname/pos-koperasi/internal/modules/notification/ws"
+	notifuc "github.com/fathanazka354/pos-koperasi/internal/usecase/notification"
+	notifrepo "github.com/fathanazka354/pos-koperasi/internal/repository/notification"
+	notifws "github.com/fathanazka354/pos-koperasi/internal/gateway/notifyws"
 
 	// Address
-	addrcontract "github.com/yourname/pos-koperasi/internal/modules/address/contract"
-	addrcontroller "github.com/yourname/pos-koperasi/internal/modules/address/controller"
-	addrrepo "github.com/yourname/pos-koperasi/internal/modules/address/repository/impl"
-	addrrouter "github.com/yourname/pos-koperasi/internal/modules/address/router"
-	addrsvc "github.com/yourname/pos-koperasi/internal/modules/address/service/impl"
+	addruc "github.com/fathanazka354/pos-koperasi/internal/usecase/address"
+	addrrepo "github.com/fathanazka354/pos-koperasi/internal/repository/address"
 
 	// Voucher
-	vouchercontract "github.com/yourname/pos-koperasi/internal/modules/voucher/contract"
-	voucherrepo "github.com/yourname/pos-koperasi/internal/modules/voucher/repository/impl"
-	vouchersvc "github.com/yourname/pos-koperasi/internal/modules/voucher/service/impl"
+	voucheruc "github.com/fathanazka354/pos-koperasi/internal/usecase/voucher"
+	voucherrepo "github.com/fathanazka354/pos-koperasi/internal/repository/voucher"
 
 	// Shop
-	shopcontract "github.com/yourname/pos-koperasi/internal/modules/shop/contract"
-	shopcontroller "github.com/yourname/pos-koperasi/internal/modules/shop/controller"
-	shoprouter "github.com/yourname/pos-koperasi/internal/modules/shop/router"
-	shopsvc "github.com/yourname/pos-koperasi/internal/modules/shop/service/impl"
+	shopuc "github.com/fathanazka354/pos-koperasi/internal/usecase/shop"
 )
 
-//go:embed all:demo
-var demoAssets embed.FS
-
-func provideDB(lc fx.Lifecycle, cfg *config.Config) (*sqlx.DB, error) {
-	db, err := config.OpenDB(cfg)
+func provideGormDB(lc fx.Lifecycle, cfg *config.Config) (*gorm.DB, error) {
+	g, err := infraDB.OpenGormPostgres(cfg)
 	if err != nil {
 		return nil, err
 	}
 	lc.Append(fx.Hook{
-		OnStop: func(ctx context.Context) error { return db.Close() },
+		OnStop: func(ctx context.Context) error {
+			_ = ctx
+			return infraDB.CloseGorm(g)
+		},
 	})
-	return db, nil
+	return g, nil
 }
 
 func provideMongoDB(lc fx.Lifecycle, cfg *config.Config) *mongo.Database {
@@ -103,193 +94,207 @@ func provideMongoDB(lc fx.Lifecycle, cfg *config.Config) *mongo.Database {
 	return db
 }
 
-func provideTransactionRepository(db *sqlx.DB) txcontract.TransactionRepository {
+func provideTransactionRepository(db *gorm.DB) txuc.Repository {
 	return txrepo.New(db)
 }
 
-func provideChatRepository(db *sqlx.DB) chatcontract.ChatRepository {
+func provideChatRepository(db *gorm.DB) chatuc.Repository {
 	return chatrepo.New(db)
 }
 
-func provideProductRepository(db *sqlx.DB) productcontract.ProductRepository {
+func provideProductRepository(db *gorm.DB) productuc.Repository {
 	return productrepo.New(db)
 }
 
-func provideAddressRepository(db *sqlx.DB) addrcontract.AddressRepository {
+func provideAddressRepository(db *gorm.DB) addruc.Repository {
 	return addrrepo.New(db)
 }
 
-func provideVoucherRepository(db *sqlx.DB) vouchercontract.VoucherRepository {
+func provideVoucherRepository(db *gorm.DB) voucheruc.Repository {
 	return voucherrepo.New(db)
 }
 
-func provideNotificationRepository(mongoDB *mongo.Database) notifcontract.NotificationRepository {
+func provideNotificationRepository(mongoDB *mongo.Database) notifuc.Repository {
 	if mongoDB == nil {
 		log.Println("MongoDB nil — menggunakan in-memory notification repository")
-		return notifmem.New()
+		return notifrepo.NewMemory()
 	}
-	return notifrepo.New(mongoDB)
+	return notifrepo.NewMongo(mongoDB)
 }
 
-func provideAuthService(db *sqlx.DB, cfg *config.Config) authcontract.AuthService {
-	return authsvc.New(db, cfg.JWTSecret, cfg.JWTExpiry)
+func provideAuthRepository(db *gorm.DB) authuc.Repository {
+	return authrepo.New(db)
+}
+
+func provideAuthService(repo authuc.Repository, cfg *config.Config) authuc.Usecase {
+	return authuc.New(repo, cfg.JWTSecret, cfg.JWTExpiry)
 }
 
 func provideTransactionService(
-	repo txcontract.TransactionRepository,
+	repo txuc.Repository,
 	mt *midtransClient.Client,
-) *txsvc.Service {
-	return txsvc.New(repo, mt)
+	ob outbox.PaymentOutboxStore,
+) txuc.Usecase {
+	return txuc.New(repo, mt, ob)
 }
 
-func provideTransactionServiceAsContract(svc *txsvc.Service) txcontract.TransactionService {
-	return svc
+func providePaymentOutboxStore(
+	mongoDB *mongo.Database,
+	nq *queue.RedisMemberNotifyQueue,
+	notifSvc notifuc.Usecase,
+) outbox.PaymentOutboxStore {
+	if mongoDB == nil {
+		return outbox.NewDirectPaymentOutboxStore(nq, notifSvc)
+	}
+	return outbox.NewMongoPaymentOutboxStore(mongoDB)
 }
 
-func provideProductService(repo productcontract.ProductRepository) productcontract.ProductService {
-	return productsvc.New(repo)
+func provideProductService(repo productuc.Repository) productuc.Usecase {
+	return productuc.New(repo)
 }
 
 func provideChatService(
-	db *sqlx.DB,
-	repo chatcontract.ChatRepository,
+	repo chatuc.Repository,
 	hub *chatutil.Hub,
 	presence *chatutil.Presence,
-) chatcontract.ChatService {
-	return chatsvc.New(db, repo, hub, presence)
+) chatuc.Usecase {
+	return chatuc.New(repo, hub, presence)
 }
 
 func provideNotificationService(
-	repo notifcontract.NotificationRepository,
+	repo notifuc.Repository,
 	hub *notifws.NotifyHub,
-) notifcontract.NotificationService {
-	return notifsvc.New(repo, hub)
+) notifuc.Usecase {
+	return notifuc.New(repo, hub)
 }
 
-func provideAddressService(repo addrcontract.AddressRepository) addrcontract.AddressService {
-	return addrsvc.New(repo)
+func provideMidtransServerKey(cfg *config.Config) string {
+	return cfg.MidtransServerKey
 }
 
-func provideVoucherService(repo vouchercontract.VoucherRepository) vouchercontract.VoucherService {
-	return vouchersvc.New(repo)
+func provideAddressService(repo addruc.Repository) addruc.Usecase {
+	return addruc.New(repo)
+}
+
+func provideVoucherService(repo voucheruc.Repository) voucheruc.Usecase {
+	return voucheruc.New(repo)
 }
 
 func provideShopService(
-	txRepo txcontract.TransactionRepository,
-	addrRepo addrcontract.AddressRepository,
-	voucherSvc vouchercontract.VoucherService,
+	txRepo txuc.Repository,
+	addrRepo addruc.Repository,
+	voucherSvc voucheruc.Usecase,
 	mt *midtransClient.Client,
-) *shopsvc.Service {
-	return shopsvc.New(txRepo, addrRepo, voucherSvc, mt)
+	ob outbox.PaymentOutboxStore,
+) shopuc.Usecase {
+	return shopuc.New(txRepo, addrRepo, voucherSvc, mt, ob)
 }
 
-// wireNotification menyuntikkan notifyFn ke transaction service dan shop service.
-func wireNotification(
-	txService *txsvc.Service,
-	shopService *shopsvc.Service,
-	notifSvc notifcontract.NotificationService,
+// registerOutboxPaymentNotifyWorker memublikasikan event outbox MongoDB → notifikasi (Redis atau sinkron).
+func registerOutboxPaymentNotifyWorker(
+	lc fx.Lifecycle,
+	store outbox.PaymentOutboxStore,
+	nq *queue.RedisMemberNotifyQueue,
+	notifSvc notifuc.Usecase,
 ) {
-	txService.WithNotify(notifSvc.Notify)
-	shopService.WithNotify(notifSvc.Notify)
+	wctx, cancel := context.WithCancel(context.Background())
+	lc.Append(fx.Hook{
+		OnStart: func(_ context.Context) error {
+			go outbox.RunPaymentNotifyWorker(wctx, store, nq, notifSvc)
+			return nil
+		},
+		OnStop: func(_ context.Context) error {
+			cancel()
+			return nil
+		},
+	})
 }
 
-func newTxController(svc txcontract.TransactionService, cfg *config.Config) *txcontroller.Controller {
-	return txcontroller.New(svc, cfg.MidtransServerKey)
-}
-
-func newChatController(svc chatcontract.ChatService, cfg *config.Config) *chatcontroller.Controller {
-	return chatcontroller.New(svc, cfg.JWTSecret)
-}
-
-func newNotifController(svc notifcontract.NotificationService, hub *notifws.NotifyHub, cfg *config.Config) *notifcontroller.Controller {
-	return notifcontroller.New(svc, hub, cfg.JWTSecret)
-}
-
-func newHTTPRouter(
-	cfg *config.Config,
-	authR *authrouter.Router,
-	txR *txrouter.Router,
-	chatR *chatrouter.Router,
-	productR *productrouter.Router,
-	productCtl *productcontroller.Controller,
-	notifR *notifrouter.Router,
-	addrR *addrrouter.Router,
-	shopR *shoprouter.Router,
-) http.Handler {
-	demoFS, err := fs.Sub(demoAssets, "demo")
-	if err != nil {
-		log.Fatalf("demo static: %v", err)
+// provideRedisClient koneksi opsional untuk antrian webhook; gagal ping → nil (webhook sinkron).
+func provideRedisClient(lc fx.Lifecycle, cfg *config.Config) *redis.Client {
+	if cfg.RedisAddr == "" {
+		return nil
 	}
-	demoFileServer := http.FileServer(http.FS(demoFS))
-
-	r := chi.NewRouter()
-
-	r.Use(chimiddleware.Logger)
-	r.Use(chimiddleware.Recoverer)
-	r.Use(chimiddleware.RequestID)
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders: []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-	}))
-
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/demo/", http.StatusTemporaryRedirect)
+	c := queue.NewRedisFromConfig(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+	pingCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := c.Ping(pingCtx).Err(); err != nil {
+		log.Printf("Redis tidak tersedia (%v): webhook Midtrans diproses sinkron", err)
+		_ = c.Close()
+		return nil
+	}
+	log.Printf("Redis terhubung — stream webhook %q, notifikasi member %q",
+		queue.StreamMidtransWebhooks, queue.StreamMemberNotifications)
+	lc.Append(fx.Hook{
+		OnStop: func(ctx context.Context) error { return c.Close() },
 	})
-	r.Get("/demo", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/demo/", http.StatusTemporaryRedirect)
+	return c
+}
+
+func provideMidtransWebhookQueue(rdb *redis.Client) *queue.RedisMidtransQueue {
+	if rdb == nil {
+		return nil
+	}
+	return queue.NewRedisMidtransQueue(rdb)
+}
+
+func provideMemberNotifyQueue(rdb *redis.Client) *queue.RedisMemberNotifyQueue {
+	if rdb == nil {
+		return nil
+	}
+	return queue.NewRedisMemberNotifyQueue(rdb)
+}
+
+// registerMemberNotifyConsumer memproses antrian notifikasi member (Notify → DB + WS).
+func registerMemberNotifyConsumer(lc fx.Lifecycle, q *queue.RedisMemberNotifyQueue, notifSvc notifuc.Usecase) {
+	if q == nil {
+		return
+	}
+	wctx, cancel := context.WithCancel(context.Background())
+	lc.Append(fx.Hook{
+		OnStart: func(_ context.Context) error {
+			go q.RunConsumer(wctx, notifSvc)
+			return nil
+		},
+		OnStop: func(_ context.Context) error {
+			cancel()
+			return nil
+		},
 	})
-	r.Handle("/demo/*", http.StripPrefix("/demo", demoFileServer))
-	// Backward-compat aliases
-	r.Get("/demo/chat", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/demo/", http.StatusTemporaryRedirect)
+}
+
+// registerMidtransWebhookConsumer menjalankan worker yang memanggil HandleMidtransNotification.
+func registerMidtransWebhookConsumer(lc fx.Lifecycle, q *queue.RedisMidtransQueue, svc txuc.Usecase) {
+	if q == nil {
+		return
+	}
+	wctx, cancel := context.WithCancel(context.Background())
+	lc.Append(fx.Hook{
+		OnStart: func(_ context.Context) error {
+			go q.RunConsumer(wctx, svc)
+			return nil
+		},
+		OnStop: func(_ context.Context) error {
+			cancel()
+			return nil
+		},
 	})
-	r.Get("/demo/shop", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/demo/", http.StatusTemporaryRedirect)
-	})
-
-	r.Route("/api/v1", func(r chi.Router) {
-		authR.Register(r)
-		txR.RegisterPublic(r)
-		chatR.Register(r, cfg.JWTSecret)
-
-		// Public shop endpoints (tanpa auth)
-		productR.RegisterPublic(r)
-
-		// Notification WS + member routes
-		notifR.Register(r, cfg.JWTSecret)
-
-		// Address member routes
-		addrR.Register(r, cfg.JWTSecret)
-
-		// Shop checkout + orders
-		shopR.Register(r, cfg.JWTSecret)
-
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.JWTAuth(cfg.JWTSecret))
-
-			txR.RegisterProtected(r)
-			productR.RegisterProtected(r)
-			productR.RegisterSeller(r)
-
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireRole("supervisor", "admin"))
-				r.Get("/products/low-stock/detail", productCtl.GetLowStock)
-			})
-		})
-	})
-
-	return r
 }
 
 func registerHTTPServer(lc fx.Lifecycle, cfg *config.Config, handler http.Handler) {
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%s", cfg.AppPort),
-		Handler: handler,
+		Addr:              fmt.Sprintf(":%s", cfg.AppPort),
+		Handler:           handler,
+		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
+		ReadTimeout:       cfg.HTTPReadTimeout,
+		WriteTimeout:      cfg.HTTPWriteTimeout,
+		IdleTimeout:       cfg.HTTPIdleTimeout,
 	}
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			log.Printf("Server running on %s [%s]", srv.Addr, cfg.AppEnv)
+			log.Printf("HTTP timeouts: read_header=%s read=%s write=%s idle=%s shutdown=%s",
+				cfg.HTTPReadHeaderTimeout, cfg.HTTPReadTimeout, cfg.HTTPWriteTimeout, cfg.HTTPIdleTimeout, cfg.HTTPShutdownTimeout)
 			log.Printf("Demo App   : http://localhost:%s/demo", cfg.AppPort)
 			log.Printf("Webhook    : POST http://localhost:%s/api/v1/midtrans/webhook", cfg.AppPort)
 			log.Printf("==> Untuk terima webhook dari Midtrans, jalankan: ngrok start api8080")
@@ -302,7 +307,14 @@ func registerHTTPServer(lc fx.Lifecycle, cfg *config.Config, handler http.Handle
 			}()
 			return nil
 		},
-		OnStop: func(ctx context.Context) error { return srv.Shutdown(ctx) },
+		OnStop: func(_ context.Context) error {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.HTTPShutdownTimeout)
+			defer cancel()
+			if err := srv.Shutdown(shutdownCtx); err != nil {
+				return fmt.Errorf("http shutdown: %w", err)
+			}
+			return nil
+		},
 	})
 }
 
@@ -310,7 +322,7 @@ func fxModule() fx.Option {
 	return fx.Options(
 		fx.Provide(
 			config.Load,
-			provideDB,
+			provideGormDB,
 			provideMongoDB,
 			midtransClient.NewClient,
 			chatutil.NewHub,
@@ -318,48 +330,61 @@ func fxModule() fx.Option {
 			notifws.NewNotifyHub,
 
 			// Repositories
+			provideAuthRepository,
 			provideTransactionRepository,
 			provideChatRepository,
 			provideProductRepository,
 			provideAddressRepository,
 			provideVoucherRepository,
 			provideNotificationRepository,
+			providePaymentOutboxStore,
 
 			// Services
 			provideAuthService,
 			provideTransactionService,
-			provideTransactionServiceAsContract,
 			provideProductService,
 			provideChatService,
 			provideNotificationService,
+			provideMidtransServerKey,
 			provideAddressService,
 			provideVoucherService,
 			provideShopService,
-			func(s *shopsvc.Service) shopcontract.ShopService { return s },
 
-			// Controllers
-			authcontroller.New,
-			newTxController,
-			productcontroller.New,
-			newChatController,
-			newNotifController,
-			addrcontroller.New,
-			func(svc shopcontract.ShopService) *shopcontroller.Controller { return shopcontroller.New(svc) },
+			// Delivery (Auth)
+			authhandler.New,
+			authroute.New,
+			// Delivery (Product)
+			producthandler.New,
+			productroute.New,
+			// Delivery (Address)
+			addrhandler.New,
+			addrroute.New,
+			// Delivery (Shop)
+			shophandler.New,
+			shoproute.New,
+			// Delivery (Transaction)
+			txhandler.New,
+			txroute.New,
+			// Delivery (Chat)
+			chathandler.New,
+			chatroute.New,
+			// Delivery (Notification)
+			notifhandler.New,
+			notifroute.New,
 
+			// Controllers (legacy modules)
+			provideRedisClient,
+			provideMidtransWebhookQueue,
+			provideMemberNotifyQueue,
 			// Routers
-			authrouter.New,
-			txrouter.New,
-			productrouter.New,
-			chatrouter.New,
-			notifrouter.New,
-			addrrouter.New,
-			func(ctl *shopcontroller.Controller) *shoprouter.Router { return shoprouter.New(ctl) },
 
 			newHTTPRouter,
 		),
 		fx.Invoke(
 			registerHTTPServer,
-			wireNotification, // hubungkan notifyFn ke transaction service
+			registerOutboxPaymentNotifyWorker,
+			registerMidtransWebhookConsumer,
+			registerMemberNotifyConsumer,
 		),
 	)
 }

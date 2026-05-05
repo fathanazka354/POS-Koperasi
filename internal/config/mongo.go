@@ -14,6 +14,15 @@ func OpenMongo(cfg *Config) (*mongo.Database, error) {
 	defer cancel()
 
 	clientOpts := options.Client().ApplyURI(cfg.MongoURI)
+	if cfg.MongoMaxPoolSize > 0 {
+		clientOpts.SetMaxPoolSize(cfg.MongoMaxPoolSize)
+	}
+	if cfg.MongoMinPoolSize > 0 {
+		clientOpts.SetMinPoolSize(cfg.MongoMinPoolSize)
+	}
+	if cfg.MongoMaxConnIdleTime > 0 {
+		clientOpts.SetMaxConnIdleTime(cfg.MongoMaxConnIdleTime)
+	}
 	client, err := mongo.Connect(ctx, clientOpts)
 	if err != nil {
 		return nil, err

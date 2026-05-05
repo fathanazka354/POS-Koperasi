@@ -3,16 +3,20 @@ package main
 import (
 	"log"
 
-	"github.com/yourname/pos-koperasi/internal/config"
-	"github.com/yourname/pos-koperasi/internal/seed"
+	"github.com/fathanazka354/pos-koperasi/internal/config"
+	infraDB "github.com/fathanazka354/pos-koperasi/internal/infra/db"
+	"github.com/fathanazka354/pos-koperasi/internal/seed"
 )
 
 func main() {
 	cfg := config.Load()
-	db := config.NewDB(cfg)
-	defer db.Close()
+	gdb, err := infraDB.OpenGormPostgres(cfg)
+	if err != nil {
+		log.Fatalf("failed to connect database: %v", err)
+	}
+	defer func() { _ = infraDB.CloseGorm(gdb) }()
 
-	if err := seed.Run(db); err != nil {
+	if err := seed.Run(gdb); err != nil {
 		log.Fatalf("seed failed: %v", err)
 	}
 	log.Println("Seed selesai.")

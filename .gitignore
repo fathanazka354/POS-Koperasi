@@ -13,3 +13,11 @@
 *.test
 bin/
 dist/
+
+# air live reload
+tmp/
+build-errors.log
+
+# Redis persistence files
+dump.rdb
+*.rdb

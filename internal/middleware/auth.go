@@ -5,26 +5,14 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/fathanazka354/pos-koperasi/internal/model"
+	"github.com/fathanazka354/pos-koperasi/pkg/response"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/yourname/pos-koperasi/pkg/response"
 )
 
 type contextKey string
 
 const EmployeeKey contextKey = "employee"
-
-// Issuer JWT untuk membedakan token karyawan vs member (WebSocket & parsing).
-const (
-	JWTIssuerEmployee = "pos-employee"
-	JWTIssuerMember   = "pos-member"
-)
-
-type EmployeeClaims struct {
-	EmployeeID int    `json:"employee_id"`
-	BranchID   int    `json:"branch_id"`
-	Role       string `json:"role"`
-	jwt.RegisteredClaims
-}
 
 func JWTAuth(jwtSecret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -42,7 +30,7 @@ func JWTAuth(jwtSecret string) func(http.Handler) http.Handler {
 			}
 
 			tokenStr := parts[1]
-			claims := &EmployeeClaims{}
+			claims := &model.EmployeeClaims{}
 
 			token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
 				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -62,8 +50,8 @@ func JWTAuth(jwtSecret string) func(http.Handler) http.Handler {
 	}
 }
 
-func GetClaims(r *http.Request) *EmployeeClaims {
-	claims, _ := r.Context().Value(EmployeeKey).(*EmployeeClaims)
+func GetClaims(r *http.Request) *model.EmployeeClaims {
+	claims, _ := r.Context().Value(EmployeeKey).(*model.EmployeeClaims)
 	return claims
 }
 

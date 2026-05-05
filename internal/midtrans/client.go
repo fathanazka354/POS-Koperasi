@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/yourname/pos-koperasi/internal/config"
+	"github.com/fathanazka354/pos-koperasi/internal/config"
 )
 
 type Client struct {
@@ -25,44 +25,10 @@ func NewClient(cfg *config.Config) *Client {
 	}
 }
 
-type chargeAction struct {
-	Name   string `json:"name"`
-	Method string `json:"method"`
-	URL    string `json:"url"`
-}
-
-// ─── QRIS ─────────────────────────────────────────────────────────────────────
-
-type createChargeQRISRequest struct {
-	PaymentType        string             `json:"payment_type"`
-	TransactionDetails transactionDetails `json:"transaction_details"`
-	// QRIS field bersifat opsional: hanya dikirim bila acquirer diisi.
-	// Mengirim acquirer="gopay" membutuhkan Merchant POP ID di dashboard Midtrans.
-	// Kalau kosong, Midtrans menggunakan acquirer default merchant yang aktif.
-	QRIS *createChargeQris `json:"qris,omitempty"`
-}
-
-type transactionDetails struct {
-	OrderID     string  `json:"order_id"`
-	GrossAmount float64 `json:"gross_amount"`
-}
-
-type createChargeQris struct {
-	Acquirer string `json:"acquirer"`
-}
-
-type chargeQRISResponse struct {
-	TransactionID     string         `json:"transaction_id"`
-	OrderID           string         `json:"order_id"`
-	TransactionStatus string         `json:"transaction_status"`
-	PaymentType       string         `json:"payment_type"`
-	Actions           []chargeAction `json:"actions"`
-}
-
 // CreateChargeQRIS membuat QRIS payment.
 // Jika acquirer kosong (""), field qris tidak dikirim dan Midtrans menggunakan
 // acquirer default merchant (menghindari error "Merchant pop id is not found").
-func (c *Client) CreateChargeQRIS(orderID string, amount float64, acquirer string) (*chargeQRISResponse, string, string, error) {
+func (c *Client) CreateChargeQRIS(orderID string, amount float64, acquirer string, extras *ChargeExtras) (*chargeQRISResponse, string, string, error) {
 	req := createChargeQRISRequest{
 		PaymentType: "qris",
 		TransactionDetails: transactionDetails{
@@ -72,6 +38,9 @@ func (c *Client) CreateChargeQRIS(orderID string, amount float64, acquirer strin
 	}
 	if acquirer != "" {
 		req.QRIS = &createChargeQris{Acquirer: acquirer}
+	}
+	if extras != nil {
+		req.optionalChargeFields = extras.oc
 	}
 
 	body, _ := json.Marshal(req)
@@ -119,32 +88,7 @@ func (c *Client) CreateChargeQRIS(orderID string, amount float64, acquirer strin
 	return &result, qrURL, string(respBody), nil
 }
 
-// ─── Bank Transfer (VA) ──────────────────────────────────────────────────────
-
-type createChargeBankTransferRequest struct {
-	PaymentType        string             `json:"payment_type"`
-	TransactionDetails transactionDetails `json:"transaction_details"`
-	BankTransfer       createBankTransfer `json:"bank_transfer"`
-}
-
-type createBankTransfer struct {
-	Bank string `json:"bank"`
-}
-
-type chargeBankTransferResponse struct {
-	TransactionID     string     `json:"transaction_id"`
-	OrderID           string     `json:"order_id"`
-	TransactionStatus string     `json:"transaction_status"`
-	PaymentType       string     `json:"payment_type"`
-	VaNumbers         []vaNumber `json:"va_numbers"`
-}
-
-type vaNumber struct {
-	Bank     string `json:"bank"`
-	VaNumber string `json:"va_number"`
-}
-
-func (c *Client) CreateChargeBankTransfer(orderID string, amount float64, bank string) (*chargeBankTransferResponse, string, string, error) {
+func (c *Client) CreateChargeBankTransfer(orderID string, amount float64, bank string, extras *ChargeExtras) (*chargeBankTransferResponse, string, string, error) {
 	req := createChargeBankTransferRequest{
 		PaymentType: "bank_transfer",
 		TransactionDetails: transactionDetails{
@@ -154,6 +98,9 @@ func (c *Client) CreateChargeBankTransfer(orderID string, amount float64, bank s
 		BankTransfer: createBankTransfer{
 			Bank: bank,
 		},
+	}
+	if extras != nil {
+		req.optionalChargeFields = extras.oc
 	}
 
 	body, _ := json.Marshal(req)
@@ -194,30 +141,8 @@ func (c *Client) CreateChargeBankTransfer(orderID string, amount float64, bank s
 	return &result, vaNumber, raw, nil
 }
 
-// ─── E-Wallet (GoPay) ───────────────────────────────────────────────────────
-
-type createChargeGoPayRequest struct {
-	PaymentType        string             `json:"payment_type"`
-	TransactionDetails transactionDetails `json:"transaction_details"`
-	GoPay              createGoPay        `json:"gopay"`
-}
-
-type createGoPay struct {
-	EnableCallback bool   `json:"enable_callback"`
-	CallbackURL    string `json:"callback_url,omitempty"`
-}
-
-type chargeGoPayResponse struct {
-	TransactionID     string         `json:"transaction_id"`
-	OrderID           string         `json:"order_id"`
-	TransactionStatus string         `json:"transaction_status"`
-	PaymentType       string         `json:"payment_type"`
-	Actions           []chargeAction `json:"actions"`
-	RedirectURL       string         `json:"redirect_url,omitempty"`
-}
-
 // CreateChargeGoPay membuat charge e-wallet dan mengambil URL dari actions (deeplink) atau redirect_url.
-func (c *Client) CreateChargeGoPay(orderID string, amount float64) (*chargeGoPayResponse, string, string, error) {
+func (c *Client) CreateChargeGoPay(orderID string, amount float64, extras *ChargeExtras) (*chargeGoPayResponse, string, string, error) {
 	req := createChargeGoPayRequest{
 		PaymentType: "gopay",
 		TransactionDetails: transactionDetails{
@@ -227,6 +152,9 @@ func (c *Client) CreateChargeGoPay(orderID string, amount float64) (*chargeGoPay
 		GoPay: createGoPay{
 			EnableCallback: false,
 		},
+	}
+	if extras != nil {
+		req.optionalChargeFields = extras.oc
 	}
 
 	body, _ := json.Marshal(req)
@@ -269,20 +197,6 @@ func (c *Client) CreateChargeGoPay(orderID string, amount float64) (*chargeGoPay
 	}
 
 	return &result, paymentURL, raw, nil
-}
-
-// ─── Get Transaction Status ──────────────────────────────────────────────────
-
-// TransactionStatusResponse berisi status transaksi dari Midtrans.
-type TransactionStatusResponse struct {
-	TransactionID     string            `json:"transaction_id"`
-	OrderID           string            `json:"order_id"`
-	TransactionStatus string            `json:"transaction_status"`
-	PaymentType       string            `json:"payment_type"`
-	GrossAmount       string            `json:"gross_amount"`
-	StatusCode        string            `json:"status_code"`
-	StatusMessage     string            `json:"status_message"`
-	FraudStatus       string            `json:"fraud_status"`
 }
 
 // GetTransactionStatus query status transaksi ke Midtrans (untuk polling).

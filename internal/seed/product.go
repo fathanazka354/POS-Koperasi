@@ -3,7 +3,7 @@ package seed
 import (
 	"fmt"
 
-	"github.com/jmoiron/sqlx"
+	"gorm.io/gorm"
 )
 
 type productRow struct {
@@ -36,7 +36,7 @@ var seedProducts = []productRow{
 }
 
 // ProductSeed memastikan produk demo ada (berdasarkan barcode unik).
-func ProductSeed(tx *sqlx.Tx, categories map[string]int, suppliers map[string]int) error {
+func ProductSeed(tx *gorm.DB, categories map[string]int, suppliers map[string]int) error {
 	for _, p := range seedProducts {
 		cid := categories[p.CategoryName]
 		sid := suppliers[p.SupplierName]
@@ -44,12 +44,12 @@ func ProductSeed(tx *sqlx.Tx, categories map[string]int, suppliers map[string]in
 			return fmt.Errorf("category/supplier tidak lengkap untuk barcode %s", p.Barcode)
 		}
 
-		_, err := tx.Exec(
+		err := tx.Exec(
 			`INSERT INTO products (category_id, supplier_id, barcode, name, unit, buy_price, sell_price, min_stock)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			 ON CONFLICT (barcode) DO NOTHING`,
 			cid, sid, p.Barcode, p.Name, p.Unit, p.BuyPrice, p.SellPrice, p.MinStock,
-		)
+		).Error
 		if err != nil {
 			return err
 		}

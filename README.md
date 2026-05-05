@@ -9,30 +9,27 @@ Dokumentasi API lengkap (request body, response, error): [`docs/API.md`](docs/AP
 
 ## Struktur Project
 
-Arsitektur **per modul** (auth, chat, product, transaction): `contract` (interface), `repository/impl`, `service/impl`, `controller` + `controller/dto`, `router`, serta `domain` untuk entity. **Dependency injection** memakai **Uber Fx** (`go.uber.org/fx`: wiring di `cmd/api/inject.go`, lifecycle HTTP server + penutupan DB).
+Arsitektur mengikuti **Clean Architecture by-layer**: **delivery (HTTP)** → **usecase** → **entity** → **repository/gateway**. **Dependency injection** memakai **Uber Fx** (`go.uber.org/fx`: wiring di `cmd/api/inject.go`, lifecycle HTTP server + penutupan DB).
 
 ```
 pos-koperasi/
 ├── cmd/api/
 │   ├── main.go               ← Entry point: fx.New(...).Run()
 │   └── inject.go             ← Fx: Provide / Invoke, router, HTTP server lifecycle
+│   └── routing.go            ← Registrasi HTTP routes (chi)
 ├── cmd/seed/
 │   └── main.go               ← Seed DB (per entitas di internal/seed)
 ├── internal/
-│   ├── config/config.go      ← Load .env, OpenDB / NewDB
-│   ├── middleware/           ← JWT, member chat token, role
-│   ├── model/                ← Model chat (thread / pesan) — sisanya domain per modul
-│   ├── modules/
-│   │   ├── auth/             ← domain, contract, service/impl, controller+dto, router
-│   │   ├── chat/             ← + utility (WebSocket hub), repository/impl, …
-│   │   ├── product/
-│   │   ├── transaction/
-│   │   ├── notification/     ← MongoDB + WebSocket push (notif bell)
-│   │   ├── address/          ← Alamat pengiriman member (multi-address)
-│   │   ├── voucher/          ← Kode diskon (percent / fixed)
-│   │   └── shop/             ← Member checkout, riwayat pesanan
+│   ├── config/               ← Load .env, config app + koneksi Mongo
+│   ├── delivery/http/        ← HTTP handler + route (chi)
+│   ├── middleware/           ← JWT, member auth, chat token, role
+│   ├── entity/               ← Entity (domain model) per domain
+│   ├── usecase/              ← Usecase per domain (contract + impl + adapter)
+│   ├── repository/           ← Implementasi repository (GORM/Mongo/memory)
+│   ├── gateway/              ← Redis streams, outbox, ws hub
+│   ├── infra/                ← Infra provider (mis. GORM Postgres)
 │   ├── seed/                 ← Seeder per entitas (branch, product, …)
-│   └── midtrans/             ← Client Midtrans (Core /v2/charge), notification
+│   └── midtrans/             ← Client Midtrans + notification signature/bridge
 ├── migrations/001_init.sql   ← DDL + seed legacy (opsional)
 ├── pkg/response/response.go  ← Standard API response
 ├── .env.example
@@ -46,7 +43,7 @@ pos-koperasi/
 ### 1. Clone & install
 
 ```bash
-git clone https://github.com/yourname/pos-koperasi
+git clone https://github.com/fathanazka354/pos-koperasi
 cd pos-koperasi
 cp .env.example .env
 go mod tidy

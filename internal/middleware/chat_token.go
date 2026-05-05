@@ -3,20 +3,13 @@ package middleware
 import (
 	"fmt"
 
+	"github.com/fathanazka354/pos-koperasi/internal/model"
+	chatcontract "github.com/fathanazka354/pos-koperasi/internal/usecase/chat"
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// ChatPrincipal identitas untuk koneksi WebSocket chat (karyawan atau member).
-type ChatPrincipal struct {
-	IsEmployee bool
-	EmployeeID int
-	BranchID   int
-	Role       string
-	MemberID   int
-}
-
 // ParseChatToken mem-parse Bearer token karyawan atau member (query ?token= pada WS).
-func ParseChatToken(tokenStr, secret string) (*ChatPrincipal, error) {
+func ParseChatToken(tokenStr, secret string) (*chatcontract.ChatPrincipal, error) {
 	keyFunc := func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
@@ -32,23 +25,23 @@ func ParseChatToken(tokenStr, secret string) (*ChatPrincipal, error) {
 
 	iss, _ := mc["iss"].(string)
 	switch iss {
-	case JWTIssuerEmployee:
+	case model.JWTIssuerEmployee:
 		eid := intFromClaim(mc, "employee_id")
 		if eid == 0 {
 			return nil, fmt.Errorf("invalid employee token")
 		}
-		return &ChatPrincipal{
+		return &chatcontract.ChatPrincipal{
 			IsEmployee: true,
 			EmployeeID: eid,
 			BranchID:   intFromClaim(mc, "branch_id"),
 			Role:       strFromClaim(mc, "role"),
 		}, nil
-	case JWTIssuerMember:
+	case model.JWTIssuerMember:
 		mid := intFromClaim(mc, "member_id")
 		if mid == 0 {
 			return nil, fmt.Errorf("invalid member token")
 		}
-		return &ChatPrincipal{MemberID: mid}, nil
+		return &chatcontract.ChatPrincipal{MemberID: mid}, nil
 	default:
 		return nil, fmt.Errorf("unknown or missing token issuer")
 	}

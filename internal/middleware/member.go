@@ -5,16 +5,12 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/fathanazka354/pos-koperasi/internal/model"
+	"github.com/fathanazka354/pos-koperasi/pkg/response"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/yourname/pos-koperasi/pkg/response"
 )
 
 const MemberKey contextKey = "member"
-
-type MemberClaims struct {
-	MemberID int `json:"member_id"`
-	jwt.RegisteredClaims
-}
 
 func MemberJWTAuth(jwtSecret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -32,7 +28,7 @@ func MemberJWTAuth(jwtSecret string) func(http.Handler) http.Handler {
 			}
 
 			tokenStr := parts[1]
-			claims := &MemberClaims{}
+			claims := &model.MemberClaims{}
 
 			token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
 				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -46,7 +42,7 @@ func MemberJWTAuth(jwtSecret string) func(http.Handler) http.Handler {
 				return
 			}
 
-			if claims.Issuer != JWTIssuerMember || claims.MemberID == 0 {
+			if claims.Issuer != model.JWTIssuerMember || claims.MemberID == 0 {
 				response.Unauthorized(w, "Invalid member token")
 				return
 			}
@@ -57,14 +53,14 @@ func MemberJWTAuth(jwtSecret string) func(http.Handler) http.Handler {
 	}
 }
 
-func GetMemberClaims(r *http.Request) *MemberClaims {
-	claims, _ := r.Context().Value(MemberKey).(*MemberClaims)
+func GetMemberClaims(r *http.Request) *model.MemberClaims {
+	claims, _ := r.Context().Value(MemberKey).(*model.MemberClaims)
 	return claims
 }
 
 // ParseMemberToken mem-parse token string menjadi MemberClaims (untuk WebSocket query param).
-func ParseMemberToken(tokenStr, jwtSecret string) (*MemberClaims, error) {
-	claims := &MemberClaims{}
+func ParseMemberToken(tokenStr, jwtSecret string) (*model.MemberClaims, error) {
+	claims := &model.MemberClaims{}
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, jwt.ErrSignatureInvalid
@@ -74,7 +70,7 @@ func ParseMemberToken(tokenStr, jwtSecret string) (*MemberClaims, error) {
 	if err != nil || !token.Valid {
 		return nil, jwt.ErrSignatureInvalid
 	}
-	if claims.Issuer != JWTIssuerMember || claims.MemberID == 0 {
+	if claims.Issuer != model.JWTIssuerMember || claims.MemberID == 0 {
 		return nil, jwt.ErrSignatureInvalid
 	}
 	return claims, nil
